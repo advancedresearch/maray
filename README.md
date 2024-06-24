@@ -1,7 +1,7 @@
 # Maray
 JIT Ray Tracing using basic math
 
-![chess](images/chess.png)
+![chess](https://github.com/advancedresearch/maray/blob/master/images/chess.png?raw=true)
 
 This image was rendered by Maray from "data/chess.maray".
 
