@@ -28,7 +28,8 @@ with the size `[u32; 2]`, so the renderer knows the resolution of the image. The
 
 ### Features
 
-Maray contains much less features than other ray tracing software. In Maray, you build stuff using basic math, so you need an external programming language or tool to produce the data. However, besides this restriction, there are no limits on how people produce content. Results are reproduced deterministically on all platforms and the code runs on most hardware. Using basic math helps researchers build tools
+Maray contains much less features than other ray tracing software. In Maray, you build stuff using basic math, so you need an external programming language or tool to produce the data. However, besides this restriction, there are no limits on how people produce content. Results are reproduced deterministically on all platforms and the code runs on most hardware. Using basic math helps researchers build tools that works for all content
+produced in Maray.
 
  Maray can be used as a Rust library:
 
@@ -36,7 +37,7 @@ Maray contains much less features than other ray tracing software. In Maray, you
 - Automatic compressor of math formula
 - Render and export to PNG file
 - Parallel rendering using Rayon and interpreter
-- Parallel rendering using WASM and JIT by Cranelift
+- Parallel rendering using WASM and JIT by [wasmer](https://crates.io/crates/wasmer)
 - `Semantics` trait for performing semantical analysis
 
 When using Maray, it is common to inline everything first and use automatic compression to reduce operations.
