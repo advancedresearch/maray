@@ -1,0 +1,20 @@
+[package]
+name = "maray"
+version = "0.1.0"
+edition = "2021"
+keywords = ["advancedresearch", "jit", "ray", "tracing", "math"]
+description = "JIT Ray Tracing using basic math"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/advancedresearch/maray.git"
+homepage = "https://github.com/advancedresearch/maray"
+exclude = ["data/*", "images/*"]
+
+[dependencies]
+image = "0.25.1"
+rayon = "1.10.0"
+wasmer = "4.3.2"
+anyhow = "1.0.86"
+bincode = "1.3.3"
+serde = "1.0.203"
+clap = "4.5.7"
