@@ -47,6 +47,10 @@ impl Compressor {
             }
             Let(_) => {}
             Decor(ab) => self.count_expr(&ab.0),
+            App(abc) => {
+                self.count_expr(&abc.1);
+                self.count_expr(&abc.2);
+            }
         }
     }
 

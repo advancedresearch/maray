@@ -2,10 +2,10 @@
 
 use wasmer::{Store, Module, Instance, imports, Imports, TypedFunction};
 use crate::semantics::{BinOp, UnOp};
-use crate::{Context, Expr};
+use crate::{Context, Expr, Runtime};
 
 /// Get imported functions.
-pub fn imports(store: &mut Store) -> wasmer::Imports {
+pub fn imports<T: 'static>(store: &mut Store) -> wasmer::Imports {
     use wasmer::Function;
     fn abs(v: f64) -> f64 {v.abs()}
     fn sin(v: f64) -> f64 {v.sin()}
@@ -14,6 +14,11 @@ pub fn imports(store: &mut Store) -> wasmer::Imports {
     fn recip(v: f64) -> f64 {v.recip()}
     fn step(v: f64) -> f64 {if v >= 0.0 {1.0} else {0.0}}
     fn id(v: f64) -> f64 {v}
+    fn app<T: 'static>(id: i64, x: f64, y: f64) -> f64 {
+        let runtime = unsafe { &*current::Current::<Runtime<T>>::new() };
+        let f = runtime.functions[id as usize];
+        f(&runtime.ctx, x, y)
+    }
     imports! {
         "env" => {
             "abs" => Function::new_typed(store, abs),
@@ -23,6 +28,7 @@ pub fn imports(store: &mut Store) -> wasmer::Imports {
             "recip" => Function::new_typed(store, recip),
             "step" => Function::new_typed(store, step),
             "id" => Function::new_typed(store, id),
+            "app" => Function::new_typed(store, app::<T>),
         },
     }
 }
@@ -63,6 +69,7 @@ pub fn functions() -> String {
     (func $exp (import "env" "exp") (param f64) (result f64))
     (func $abs (import "env" "abs") (param f64) (result f64))
     (func $sin (import "env" "sin") (param f64) (result f64))
+    (func $app (import "env" "app") (param i64) (param f64) (param f64) (result f64))
     "#.into()
 }
 
@@ -110,6 +117,7 @@ pub fn gen_expr(e: &Expr) -> String {
             format!("{}\n{}\n{}", s, gen_vars(&ab.0), gen_expr(&ab.1))
         }
         Decor(ab) => gen_expr(&ab.0),
+        App(abc) => format!("i64.const {}\n{}\n{}\ncall $app", abc.0, gen_expr(&abc.1), gen_expr(&abc.2)),
     }
 }
 
@@ -129,7 +137,7 @@ pub struct Wasm {
 
 impl Wasm {
     /// Generates JIT from expression.
-    pub fn from_expr(e: &Expr) -> anyhow::Result<Wasm> {
+    pub fn from_expr<T: 'static>(e: &Expr) -> anyhow::Result<Wasm> {
         let module_wat = format!(r#"
         (module
         {}
@@ -141,7 +149,7 @@ impl Wasm {
 
         let mut store = Store::default();
         let module = Module::new(&store, &module_wat)?;
-        let imports = imports(&mut store);
+        let imports = imports::<T>(&mut store);
         let instance = Instance::new(&mut store, &module, &imports)?;
 
         let f: TypedFunction<(f64, f64), f64> = instance.exports

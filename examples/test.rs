@@ -27,7 +27,8 @@ fn main() {
     let g = mul(shape.clone(), nat(255));
     let b = mul(shape.clone(), nat(255));
 
-    wasm_par_gen(8, [r.clone(), g, b], "test.png", size);
+    let rt = Runtime::new();
+    wasm_par_gen(8, &rt, [r.clone(), g, b], "test.png", size);
 
     let r_str = format!("{}", shape);
     println!("{}\n{}", r_str, r_str.chars().count());

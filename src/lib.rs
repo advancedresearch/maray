@@ -49,6 +49,37 @@ impl Context {
 /// Used to decorate an expression with extra information.
 pub type Decor = (Expr, Vec<Token>);
 
+/// Stores context and external functions.
+///
+/// The context is some custom data type that one needs for external functions.
+#[derive(Clone)]
+pub struct Runtime<T = ()> {
+    /// Context.
+    pub ctx: std::sync::Arc<T>,
+    /// External functions.
+    pub functions: Vec<fn(&T, f64, f64) -> f64>,
+}
+
+impl Runtime {
+    /// Creates new runtime with empty context.
+    pub fn new() -> Runtime {
+        Runtime {
+            ctx: std::sync::Arc::new(()),
+            functions: vec![],
+        }
+    }
+}
+
+impl<T> Runtime<T> {
+    /// Creates runtime from parts.
+    pub fn from_parts(ctx: T, functions: Vec<fn(&T, f64, f64) -> f64>) -> Runtime<T> {
+        Runtime {
+            ctx: std::sync::Arc::new(ctx),
+            functions,
+        }
+    }
+}
+
 /// Stores expression of two variables (X and Y).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expr {
@@ -94,6 +125,8 @@ pub enum Expr {
     ///
     /// This is used in semantical analysis.
     Decor(Box<Decor>),
+    /// Call some external function.
+    App(Box<(u32, Expr, Expr)>),
 }
 
 impl Div<u64> for Expr {
@@ -317,6 +350,7 @@ impl fmt::Display for Expr {
                     last_start = token.is_start_bracket();
                 }
             }
+            App(abc) => write!(w, "app({},{},{})", abc.0, abc.1, abc.2)?,
         }
         Ok(())
     }
@@ -475,6 +509,7 @@ impl Expr {
             Min(ab) => Min(Box::new((ab.0.rewrite(ctx), ab.1.rewrite(ctx)))),
             Let(_) => self,
             Decor(ab) => Decor(Box::new((ab.0.rewrite(ctx), ab.1.clone()))),
+            App(abc) => App(Box::new((abc.0, abc.1.rewrite(ctx), abc.2.rewrite(ctx)))),
         }
     }
 
@@ -700,16 +735,18 @@ impl Expr {
             }
             Let(_) => self,
             Decor(ab) => Decor(Box::new((ab.0.simplify(), ab.1.clone()))),
+            App(abc) => App(Box::new((abc.0, abc.1.simplify(), abc.2.simplify()))),
         }
     }
 
     /// Evaluate X with Y set to zero.
     pub fn eval(&self, v: f64) -> f64 {
-        self.eval2([v, 0.0], &Context::new(), &mut Cache::new())
+        let rt = Runtime::new();
+        self.eval2(&rt, [v, 0.0], &Context::new(), &mut Cache::new())
     }
 
     /// Evaluate in 2D.
-    pub fn eval2(&self, v: [f64; 2], ctx: &Context, cache: &mut Cache) -> f64 {
+    pub fn eval2<T>(&self, rt: &Runtime<T>, v: [f64; 2], ctx: &Context, cache: &mut Cache) -> f64 {
         use Expr::*;
 
         match self {
@@ -717,53 +754,62 @@ impl Expr {
             Y => v[1],
             Tau => 6.283185307179586,
             E => 2.718281828459045,
-            Var(name) => cache.val(v, name, ctx).0,
+            Var(name) => cache.val(rt, v, name, ctx).0,
             Nat(n) => *n as f64,
-            Neg(a) => -a.eval2(v, ctx, cache),
-            Abs(a) => a.eval2(v, ctx, cache).abs(),
-            Recip(a) => a.eval2(v, ctx, cache).recip(),
-            Sqrt(a) => a.eval2(v, ctx, cache).sqrt(),
+            Neg(a) => -a.eval2(rt, v, ctx, cache),
+            Abs(a) => a.eval2(rt, v, ctx, cache).abs(),
+            Recip(a) => a.eval2(rt, v, ctx, cache).recip(),
+            Sqrt(a) => a.eval2(rt, v, ctx, cache).sqrt(),
             Step(a) => {
-                let v = a.eval2(v, ctx, cache);
+                let v = a.eval2(rt, v, ctx, cache);
                 if v >= 0.0 {1.0} else {0.0}
             }
-            Sin(a) => a.eval2(v, ctx, cache).sin(),
-            Exp(a) => a.eval2(v, ctx, cache).exp(),
-            Ln(a) => a.eval2(v, ctx, cache).ln(),
-            Add(ab) => ab.0.eval2(v, ctx, cache) + ab.1.eval2(v, ctx, cache),
-            Mul(ab) => ab.0.eval2(v, ctx, cache) * ab.1.eval2(v, ctx, cache),
-            Max(ab) => ab.0.eval2(v, ctx, cache).max(ab.1.eval2(v, ctx, cache)),
-            Min(ab) => ab.0.eval2(v, ctx, cache).min(ab.1.eval2(v, ctx, cache)),
+            Sin(a) => a.eval2(rt, v, ctx, cache).sin(),
+            Exp(a) => a.eval2(rt, v, ctx, cache).exp(),
+            Ln(a) => a.eval2(rt, v, ctx, cache).ln(),
+            Add(ab) => ab.0.eval2(rt, v, ctx, cache) + ab.1.eval2(rt, v, ctx, cache),
+            Mul(ab) => ab.0.eval2(rt, v, ctx, cache) * ab.1.eval2(rt, v, ctx, cache),
+            Max(ab) => ab.0.eval2(rt, v, ctx, cache).max(ab.1.eval2(rt, v, ctx, cache)),
+            Min(ab) => ab.0.eval2(rt, v, ctx, cache).min(ab.1.eval2(rt, v, ctx, cache)),
             Let(ab) => {
                 let ctx = &ab.0;
-                ab.1.eval2(v, ctx, cache)
+                ab.1.eval2(rt, v, ctx, cache)
             }
-            Decor(ab) => ab.0.eval2(v, ctx, cache),
+            Decor(ab) => ab.0.eval2(rt, v, ctx, cache),
+            App(abc) => {
+                let f = rt.functions[abc.0 as usize];
+                f(&rt.ctx, abc.1.eval2(rt, v, ctx, cache), abc.2.eval2(rt, v, ctx, cache))
+            }
         }
     }
 
     /// Gets X dependence.
     ///
     /// This is used to improve caching when using interpreter.
-    pub fn dep_x(&self, v: [f64; 2], ctx: &Context, cache: &mut Cache) -> bool {
+    pub fn dep_x<T>(&self, rt: &Runtime<T>, v: [f64; 2], ctx: &Context, cache: &mut Cache) -> bool {
         use Expr::*;
 
         match self {
             X => true,
             Y | Tau | E | Nat(_) => false,
-            Var(name) => cache.val(v, name, ctx).1,
+            Var(name) => cache.val(rt, v, name, ctx).1,
             Neg(a) | Abs(a) | Recip(a) | Sqrt(a) |
-            Step(a) | Sin(a) | Exp(a) | Ln(a) => a.dep_x(v, ctx, cache),
+            Step(a) | Sin(a) | Exp(a) | Ln(a) => a.dep_x(rt, v, ctx, cache),
             Add(ab) | Mul(ab) | Max(ab) | Min(ab) => {
-                let a_dep_x = ab.0.dep_x(v, ctx, cache);
-                let b_dep_x = ab.1.dep_x(v, ctx, cache);
+                let a_dep_x = ab.0.dep_x(rt, v, ctx, cache);
+                let b_dep_x = ab.1.dep_x(rt, v, ctx, cache);
                 a_dep_x || b_dep_x
             }
             Let(ab) => {
                 let ctx = &ab.0;
-                ab.1.dep_x(v, ctx, cache)
+                ab.1.dep_x(rt, v, ctx, cache)
             }
-            Decor(ab) => ab.0.dep_x(v, ctx, cache),
+            Decor(ab) => ab.0.dep_x(rt, v, ctx, cache),
+            App(abc) => {
+                let a_dep_x = abc.1.dep_x(rt, v, ctx, cache);
+                let b_dep_x = abc.2.dep_x(rt, v, ctx, cache);
+                a_dep_x || b_dep_x
+            }
         }
     }
 
@@ -791,6 +837,7 @@ impl Expr {
             Min(ab) => Min(Box::new((ab.0.subst2(p), ab.1.subst2(p)))),
             Let(_) => self.clone(),
             Decor(ab) => Decor(Box::new((ab.0.subst2(p), ab.1.clone()))),
+            App(abc) => App(Box::new((abc.0, abc.1.subst2(p), abc.2.subst2(p)))),
         }
     }
 
@@ -825,6 +872,8 @@ impl Expr {
     }
 }
 
+/// Call some external function.
+pub fn app(id: u32, a: Expr, b: Expr) -> Expr {Expr::App(Box::new((id, a, b)))}
 /// X.
 pub fn x() -> Expr {Expr::X}
 /// Y.
@@ -1129,7 +1178,9 @@ pub fn p4_zw(p: Point4) -> Point2 {
 }
 
 /// Render using single thread.
-pub fn gen(color: Color, file: &str, size: [u32; 2]) {
+pub fn gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+    where T: 'static + Clone
+{
     use image::{RgbImage, Rgb};
 
     let mut img = RgbImage::new(size[0], size[1]);
@@ -1142,16 +1193,18 @@ pub fn gen(color: Color, file: &str, size: [u32; 2]) {
 
         cache.clear_dep_x();
         let p = [x as f64, y as f64];
-        let r = color[0].eval2(p, &ctx, cache) as u8;
-        let g = color[1].eval2(p, &ctx, cache) as u8;
-        let b = color[2].eval2(p, &ctx, cache) as u8;
+        let r = color[0].eval2(rt, p, &ctx, cache) as u8;
+        let g = color[1].eval2(rt, p, &ctx, cache) as u8;
+        let b = color[2].eval2(rt, p, &ctx, cache) as u8;
         *pixel = Rgb([r, g, b]);
     }
     img.save(file).unwrap();
 }
 
 /// Render using Rayon and interpreter.
-pub fn par_gen(color: Color, file: &str, size: [u32; 2]) {
+pub fn par_gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+    where T: 'static + Send + Sync + Clone,
+{
     use rayon::iter::ParallelIterator;
     use rayon::iter::IntoParallelIterator;
     use std::sync::mpsc::channel;
@@ -1191,9 +1244,9 @@ pub fn par_gen(color: Color, file: &str, size: [u32; 2]) {
         for (x, pixel) in res.iter_mut().enumerate() {
             cache.clear_dep_x();
             let p = [x as f64, y as f64];
-            let r = color[0].eval2(p, &ctx, cache) as u8;
-            let g = color[1].eval2(p, &ctx, cache) as u8;
-            let b = color[2].eval2(p, &ctx, cache) as u8;
+            let r = color[0].eval2(rt, p, &ctx, cache) as u8;
+            let g = color[1].eval2(rt, p, &ctx, cache) as u8;
+            let b = color[2].eval2(rt, p, &ctx, cache) as u8;
             *pixel = Rgb([r, g, b]);
         }
         sender.send((y, res)).unwrap();
@@ -1202,7 +1255,9 @@ pub fn par_gen(color: Color, file: &str, size: [u32; 2]) {
 }
 
 /// Render using WASM parallel generation.
-pub fn wasm_par_gen(cpus: u8, color: Color, file: &str, size: [u32; 2]) {
+pub fn wasm_par_gen<T>(cpus: u8, rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+    where T: 'static + Clone + Send + Sync,
+{
     use std::sync::{Arc, Mutex};
     use std::sync::mpsc::channel;
     use image::{RgbImage, Rgb};
@@ -1242,10 +1297,14 @@ pub fn wasm_par_gen(cpus: u8, color: Color, file: &str, size: [u32; 2]) {
         let sender = sender.clone();
         let y_iter = y_iter.clone();
         let color = color.clone();
+        let rt = rt.clone();
         threads.push(std::thread::spawn(move || {
-            let mut cr = Wasm::from_expr(&color[0]).unwrap();
-            let mut cg = Wasm::from_expr(&color[1]).unwrap();
-            let mut cb = Wasm::from_expr(&color[2]).unwrap();
+            let mut rt = rt;
+            let rt_guard = current::CurrentGuard::new(&mut rt);
+
+            let mut cr = Wasm::from_expr::<T>(&color[0]).unwrap();
+            let mut cg = Wasm::from_expr::<T>(&color[1]).unwrap();
+            let mut cb = Wasm::from_expr::<T>(&color[2]).unwrap();
 
             loop {
                 let mut y_write = y_iter.lock().unwrap();
@@ -1266,6 +1325,8 @@ pub fn wasm_par_gen(cpus: u8, color: Color, file: &str, size: [u32; 2]) {
                 }
                 sender.send((y, res)).unwrap();
             }
+
+            drop(rt_guard);
         }))
     }
     drop(sender);

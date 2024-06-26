@@ -252,6 +252,7 @@ pub trait Semantics {
                 }
             }
             Decor(_) => a,
+            App(_) => a,
         }
     }
 }

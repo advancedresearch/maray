@@ -517,6 +517,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "current"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32aae0a81b2430d8d8d461a35405b75e7fed07d43df2f9066d12a7c0e89916f0"
+
+[[package]]
 name = "darling"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1149,6 +1155,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "clap",
+ "current",
  "image",
  "rayon",
  "serde",

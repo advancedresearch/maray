@@ -1,4 +1,4 @@
-use maray::{open, wasm_par_gen};
+use maray::{open, wasm_par_gen, Runtime};
 use clap::{Arg, ArgAction, Command};
 
 fn main() -> anyhow::Result<()> {
@@ -40,7 +40,8 @@ fn main() -> anyhow::Result<()> {
     {
         let cpus = u8::from_str_radix(cpus, 10)?;
         let (size, color) = open(&file)?;
-        wasm_par_gen(cpus as u8, color, &out_file, size);
+        let rt = Runtime::new();
+        wasm_par_gen(cpus as u8, &rt, color, &out_file, size);
     }
     Ok(())
 }

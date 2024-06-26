@@ -19,13 +19,13 @@ impl Cache {
     }
 
     /// Return value and x-dependency.
-    pub fn val(&mut self, p: [f64; 2], name: &String, ctx: &Context) -> (f64, bool) {
+    pub fn val<T>(&mut self, rt: &Runtime<T>, p: [f64; 2], name: &String, ctx: &Context) -> (f64, bool) {
         if let Some(v) = self.0.get(name) {*v}
         else {
             for var in &ctx.vars {
                 if &var.0 == name {
-                    let v = var.1.eval2(p, ctx, self);
-                    let dep_x = var.1.dep_x(p, ctx, self);
+                    let v = var.1.eval2(rt, p, ctx, self);
+                    let dep_x = var.1.dep_x(rt, p, ctx, self);
                     self.0.insert(name.clone(), (v, dep_x));
                     return (v, dep_x);
                 }
