@@ -17,6 +17,21 @@ Shorthand version:
 
 `> maray -c 8 -i "data/chess.maray" -o "test.png"`
 
+### Textures
+
+You can use `--textures` or `-t` to specify a list of images.
+
+```text
+> maray -c 8 -i "input.maray" -o "output.png" -t "texture0.png" "texture1.png"
+```
+
+Maray sets up a defaul runtime with functions for color channels (RGB)
+and image width and height.
+
+For the formula to get the `id` of a function, see the `textures` module.
+
+When using Maray as a library, you can customize the runtime.
+
 ### About Maray
 
 Maray is a binary format for ray tracing scenes that uses basic math expressions.

@@ -17,6 +17,7 @@ pub mod partial_eval;
 pub mod partial_red;
 pub mod semantics;
 pub mod sd;
+pub mod textures;
 pub mod token;
 pub mod wasm;
 
@@ -57,7 +58,7 @@ pub struct Runtime<T = ()> {
     /// Context.
     pub ctx: std::sync::Arc<T>,
     /// External functions.
-    pub functions: Vec<fn(&T, f64, f64) -> f64>,
+    pub functions: Vec<fn(&T, u32, f64, f64) -> f64>,
 }
 
 impl Runtime {
@@ -72,7 +73,7 @@ impl Runtime {
 
 impl<T> Runtime<T> {
     /// Creates runtime from parts.
-    pub fn from_parts(ctx: T, functions: Vec<fn(&T, f64, f64) -> f64>) -> Runtime<T> {
+    pub fn from_parts(ctx: T, functions: Vec<fn(&T, u32, f64, f64) -> f64>) -> Runtime<T> {
         Runtime {
             ctx: std::sync::Arc::new(ctx),
             functions,
@@ -778,7 +779,7 @@ impl Expr {
             Decor(ab) => ab.0.eval2(rt, v, ctx, cache),
             App(abc) => {
                 let f = rt.functions[abc.0 as usize];
-                f(&rt.ctx, abc.1.eval2(rt, v, ctx, cache), abc.2.eval2(rt, v, ctx, cache))
+                f(&rt.ctx, abc.0, abc.1.eval2(rt, v, ctx, cache), abc.2.eval2(rt, v, ctx, cache))
             }
         }
     }

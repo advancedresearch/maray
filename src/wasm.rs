@@ -17,7 +17,7 @@ pub fn imports<T: 'static>(store: &mut Store) -> wasmer::Imports {
     fn app<T: 'static>(id: i64, x: f64, y: f64) -> f64 {
         let runtime = unsafe { &*current::Current::<Runtime<T>>::new() };
         let f = runtime.functions[id as usize];
-        f(&runtime.ctx, x, y)
+        f(&runtime.ctx, id as u32, x, y)
     }
     imports! {
         "env" => {

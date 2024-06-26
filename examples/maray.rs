@@ -1,5 +1,7 @@
 use maray::{open, wasm_par_gen, Runtime};
+use maray::textures::{self, Textures};
 use clap::{Arg, ArgAction, Command};
+use image::RgbImage;
 
 fn main() -> anyhow::Result<()> {
     let matches = Command::new("Maray")
@@ -11,7 +13,7 @@ fn main() -> anyhow::Result<()> {
                 .long("cpus")
                 .action(ArgAction::Set)
                 .num_args(1..2)
-                .help("Number of CPU cores"),
+                .help("Number of CPU cores")
         )
         .arg(
             Arg::new("input")
@@ -20,7 +22,7 @@ fn main() -> anyhow::Result<()> {
                 .long("input")
                 .action(ArgAction::Set)
                 .num_args(1..2)
-                .help("Input file `*.maray`"),
+                .help("Input file `*.maray`")
         )
         .arg(
             Arg::new("output")
@@ -29,18 +31,39 @@ fn main() -> anyhow::Result<()> {
                 .long("output")
                 .action(ArgAction::Set)
                 .num_args(1..2)
-                .help("Output file `*.png`"),
+                .help("Output file `*.png`")
+        )
+        .arg(
+            Arg::new("textures")
+                .required(false)
+                .short('t')
+                .long("textures")
+                .action(ArgAction::Set)
+                .num_args(0..1024)
+                .help("Texture file `*.png`")
         )
         .get_matches();
 
-    if let (Some(cpus), Some(file), Some(out_file)) =
+    if let (Some(cpus), Some(file), Some(out_file), Some(textures)) =
         (matches.get_one::<String>("cpus"),
          matches.get_one::<String>("input"),
-         matches.get_one::<String>("output"))
+         matches.get_one::<String>("output"),
+         matches.get_many::<String>("textures"))
     {
         let cpus = u8::from_str_radix(cpus, 10)?;
         let (size, color) = open(&file)?;
-        let rt = Runtime::new();
+
+        // Set up texture functions.
+        let mut images = vec![];
+        for file in textures {
+            let image: RgbImage = image::open(file).unwrap().to_rgb8();
+            images.push(image);
+        };
+        let functions = textures::functions(images.len());
+
+        let rt = Runtime::<Textures>::from_parts(
+            textures::Textures {images}, functions
+        );
         wasm_par_gen(cpus as u8, &rt, color, &out_file, size);
     }
     Ok(())
