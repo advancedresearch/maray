@@ -1140,6 +1140,7 @@ pub fn gen(color: Color, file: &str, size: [u32; 2]) {
             eprintln!("{}%", 100.0 * (y as f64 / size[1] as f64));
         };
 
+        cache.clear_dep_x();
         let p = [x as f64, y as f64];
         let r = color[0].eval2(p, &ctx, cache) as u8;
         let g = color[1].eval2(p, &ctx, cache) as u8;
