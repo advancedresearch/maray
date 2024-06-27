@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
         )
         .get_matches();
 
-    if let (Some(cpus), Some(file), Some(out_file), Some(textures)) =
+    if let (Some(cpus), Some(file), Some(out_file), textures) =
         (matches.get_one::<String>("cpus"),
          matches.get_one::<String>("input"),
          matches.get_one::<String>("output"),
@@ -55,10 +55,12 @@ fn main() -> anyhow::Result<()> {
 
         // Set up texture functions.
         let mut images = vec![];
-        for file in textures {
-            let image: RgbImage = image::open(file).unwrap().to_rgb8();
-            images.push(image);
-        };
+        if let Some(textures) = textures {
+            for file in textures {
+                let image: RgbImage = image::open(file).unwrap().to_rgb8();
+                images.push(image);
+            };
+        }
         let functions = textures::functions(images.len());
 
         let rt = Runtime::<Textures>::from_parts(

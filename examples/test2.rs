@@ -11,7 +11,7 @@ fn main() {
 
     let texture = set_unit_square(chess(8));
 
-    let grid = Grid2([2, 2]);
+    let grid = Grid2([8, 8]);
 
     let p1 = [recip(nat(5)), recip(nat(2))];
     let p2 = [sub(nat(1), recip(nat(5))), recip(nat(2))];
@@ -47,7 +47,7 @@ fn main() {
     let b = mul(shape.clone(), nat(255));
     let color = [r, g, b];
 
-    save("test.maray", (size, color)).unwrap();
+    save("data/chess.maray", (size, color)).unwrap();
 
     let shape_str = format!("{}", shape);
     println!("\n{}\n\n{}", shape_str, shape_str.len());
