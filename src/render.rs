@@ -11,6 +11,7 @@ pub fn single_gen_to_image<T, F>(
     where T: 'static + Clone,
           F: Fn(&mut RgbImage, f64)
 {
+    let color = var_fixer::fix_color(color);
     let (w, h) = img.dimensions();
     let ctx = Context::new();
     let ref mut cache = Cache::new();
@@ -47,6 +48,7 @@ pub fn par_gen_to_image<T, F>(
     use std::sync::Mutex;
     use std::ops::DerefMut;
 
+    let color = var_fixer::fix_color(color);
     let (w, h) = img.dimensions();
     let ctx = Context::new();
     let (sender, receiver) = channel::<(u32, Vec<Rgb::<u8>>)>();
@@ -112,6 +114,7 @@ pub fn wasm_par_gen_to_image<T, F>(
     use std::sync::mpsc::channel;
     use std::ops::DerefMut;
 
+    let color = var_fixer::fix_color(color);
     let (w, h) = img.dimensions();
     let (sender, receiver) = channel::<(u32, Vec<Rgb::<u8>>)>();
     // Get the address of the image in a mutex,

@@ -23,6 +23,7 @@ pub mod semantics;
 pub mod sd;
 pub mod textures;
 pub mod token;
+pub mod var_fixer;
 
 #[cfg(feature = "render")]
 mod render;
@@ -1473,5 +1474,181 @@ mod tests {
         // Recip.
         let a = recip(div(nat(1), nat(3)));
         assert_eq!(a.simplify(), nat(3));
+    }
+
+    #[test]
+    fn test_var_fixer() {
+        let mut fix = var_fixer::VarFixer::new();
+        let a = let_(Context {
+            vars: vec![
+                (0, x())
+            ]
+        }, let_(Context {
+            vars: vec![
+                (0, y())
+            ]
+        }, var_id(0)));
+        let b = let_(Context {
+            vars: vec![
+                (0, x())
+            ]
+        }, let_(Context {
+            vars: vec![
+                (1, y())
+            ]
+        }, var_id(1)));
+        assert_eq!(fix.fix(a.clone(), &mut vec![]), b);
+
+        let a2 = [a.clone(), a.clone(), a.clone()];
+        let b2 = [
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (1, y())
+                ]
+            }, var_id(1))),
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (1, y())
+                ]
+            }, var_id(1))),
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (1, y())
+                ]
+            }, var_id(1)))
+        ];
+        assert_eq!(var_fixer::fix_color(a2), b2);
+
+        let a2 = [
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (0, y() + nat(1))
+                ]
+            }, var_id(0))),
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (0, y() + nat(2))
+                ]
+            }, var_id(0))),
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (0, y() + nat(3))
+                ]
+            }, var_id(0)))
+        ];
+        let b2 = [
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (1, y() + nat(1))
+                ]
+            }, var_id(1))),
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (2, y() + nat(2))
+                ]
+            }, var_id(2))),
+            let_(Context {
+                vars: vec![
+                    (0, x())
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (3, y() + nat(3))
+                ]
+            }, var_id(3)))
+        ];
+        assert_eq!(var_fixer::fix_color(a2), b2);
+
+        let a2 = [
+            let_(Context {
+                vars: vec![
+                    (0, x() - nat(1))
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (0, y() + nat(1))
+                ]
+            }, var_id(0))),
+            let_(Context {
+                vars: vec![
+                    (0, x() - nat(2))
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (0, y() + nat(2))
+                ]
+            }, var_id(0))),
+            let_(Context {
+                vars: vec![
+                    (0, x() - nat(3))
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (0, y() + nat(3))
+                ]
+            }, var_id(0)))
+        ];
+        let b2 = [
+            let_(Context {
+                vars: vec![
+                    (0, x() - nat(1))
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (1, y() + nat(1))
+                ]
+            }, var_id(1))),
+            let_(Context {
+                vars: vec![
+                    (2, x() - nat(2))
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (3, y() + nat(2))
+                ]
+            }, var_id(3))),
+            let_(Context {
+                vars: vec![
+                    (4, x() - nat(3))
+                ]
+            }, let_(Context {
+                vars: vec![
+                    (5, y() + nat(3))
+                ]
+            }, var_id(5)))
+        ];
+        assert_eq!(var_fixer::fix_color(a2), b2);
     }
 }
