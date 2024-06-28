@@ -13,6 +13,9 @@ impl Cache {
         Cache(HashMap::new())
     }
 
+    /// Clears cache.
+    pub fn clear(&mut self) {self.0.clear()}
+
     /// Clears cached values that are dependent on X.
     pub fn clear_dep_x(&mut self) {
         self.0.retain(|_, (_, b)| !*b);

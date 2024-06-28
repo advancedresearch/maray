@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 
 use cache::Cache;
 use token::Token;
+use image::{RgbImage, Rgb};
 
 pub mod cache;
 pub mod compressor;
@@ -1186,49 +1187,63 @@ pub fn p4_zw(p: Point4) -> Point2 {
     [p[2].clone(), p[3].clone()]
 }
 
+/// Render to image using single thread.
+pub fn gen_to_image<T, F>(rt: &Runtime<T>, color: Color, img: &mut RgbImage, report: F)
+    where T: 'static + Clone,
+          F: Fn(&mut RgbImage, f64)
+{
+    let (w, h) = img.dimensions();
+    let ctx = Context::new();
+    let ref mut cache = Cache::new();
+    for y in 0..h {
+        cache.clear();
+        report(img, y as f64 / h as f64);
+        for x in 0..w {
+            let pixel = img.get_pixel_mut(x, y);
+            cache.clear_dep_x();
+            let p = [x as f64, y as f64];
+            let r = color[0].eval2(rt, p, &ctx, cache) as u8;
+            let g = color[1].eval2(rt, p, &ctx, cache) as u8;
+            let b = color[2].eval2(rt, p, &ctx, cache) as u8;
+            *pixel = Rgb([r, g, b]);
+        }
+    }
+}
+
 /// Render using single thread.
 pub fn gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
     where T: 'static + Clone
 {
-    use image::{RgbImage, Rgb};
-
     let mut img = RgbImage::new(size[0], size[1]);
-    let ctx = Context::new();
-    let ref mut cache = Cache::new();
-    for (x, y, pixel) in img.enumerate_pixels_mut() {
-        if x == 0 {
-            eprintln!("{}%", 100.0 * (y as f64 / size[1] as f64));
-        };
-
-        cache.clear_dep_x();
-        let p = [x as f64, y as f64];
-        let r = color[0].eval2(rt, p, &ctx, cache) as u8;
-        let g = color[1].eval2(rt, p, &ctx, cache) as u8;
-        let b = color[2].eval2(rt, p, &ctx, cache) as u8;
-        *pixel = Rgb([r, g, b]);
-    }
+    gen_to_image(rt, color, &mut img, |_img, progress| {
+        eprintln!("{:.2} %", 100.0 * progress);
+    });
     img.save(file).unwrap();
 }
 
-/// Render using Rayon and interpreter.
-pub fn par_gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+/// Render to image using Rayon and interpreter.
+pub fn par_gen_to_image<T, F>(rt: &Runtime<T>, color: Color, img: &mut RgbImage, report: F)
     where T: 'static + Send + Sync + Clone,
+          F: 'static + Fn(&mut RgbImage, f64) + Send,
 {
     use rayon::iter::ParallelIterator;
     use rayon::iter::IntoParallelIterator;
     use std::sync::mpsc::channel;
-    use image::{RgbImage, Rgb};
+    use std::sync::Mutex;
+    use std::ops::DerefMut;
 
-    let mut img = RgbImage::new(size[0], size[1]);
+    let (w, h) = img.dimensions();
     let ctx = Context::new();
     let (sender, receiver) = channel::<(u32, Vec<Rgb::<u8>>)>();
-    let file: String = file.into();
+    // Get the address of the image in a mutex,
+    // knowing that the thread will be joined before returning.
+    let img_mutex = Mutex::new(img as *mut RgbImage as usize);
     let join = std::thread::spawn(move || {
-        use std::io::Write;
-
-        let mut row_count = size[1];
+        let mut img_guard = img_mutex.lock().unwrap();
+        let img = unsafe {&mut *(*img_guard.deref_mut() as *mut RgbImage)};
+        let mut row_count = h;
         'outer: loop {
-            std::thread::sleep(std::time::Duration::from_millis(5000));
+            std::thread::sleep(std::time::Duration::from_millis(500));
             let mut got_any = false;
             while let Ok((y, row)) = receiver.try_recv() {
                 got_any = true;
@@ -1236,20 +1251,18 @@ pub fn par_gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
                     img.put_pixel(x as u32, y, pixel);
                 }
                 row_count -= 1;
-                let _ = std::io::stderr().flush();
                 if row_count == 0 {break 'outer};
             }
             if got_any {
-                eprintln!("{}%", 100.0 * ((size[1] - row_count) as f64 / size[1] as f64));
-                img.save(&file).unwrap()
+                report(img, (h - row_count) as f64 / h as f64);
             };
         }
-        img.save(&file).unwrap();
+        drop(img_guard);
     });
 
-    (0..size[1]).into_par_iter().for_each(|y| {
+    (0..h).into_par_iter().for_each(|y| {
         let ref mut cache = Cache::new();
-        let mut res = vec![Rgb([0; 3]); size[0] as usize];
+        let mut res = vec![Rgb([0; 3]); w as usize];
         for (x, pixel) in res.iter_mut().enumerate() {
             cache.clear_dep_x();
             let p = [x as f64, y as f64];
@@ -1263,21 +1276,45 @@ pub fn par_gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
     join.join().unwrap();
 }
 
+/// Render using Rayon and interpreter.
+pub fn par_gen<T>(rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+    where T: 'static + Send + Sync + Clone,
+{
+    let file2 = file.to_string();
+    let mut img = RgbImage::new(size[0], size[1]);
+    par_gen_to_image(rt, color, &mut img, move |img, progress| {
+        use std::io::Write;
+        eprintln!("{:.2} %", 100.0 * progress);
+        let _ = std::io::stderr().flush();
+        img.save(&file2).unwrap();
+    });
+    img.save(&file).unwrap();
+}
+
 /// Render using WASM parallel generation.
-pub fn wasm_par_gen<T>(cpus: u8, rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+pub fn wasm_par_gen_to_image<T, F>(
+    cpus: u8,
+    rt: &Runtime<T>,
+    color: Color,
+    img: &mut RgbImage,
+    report: F
+)
     where T: 'static + Clone + Send + Sync,
+          F: 'static + Fn(&mut RgbImage, f64) + Send,
 {
     use std::sync::{Arc, Mutex};
     use std::sync::mpsc::channel;
-    use image::{RgbImage, Rgb};
+    use std::ops::DerefMut;
 
-    let mut img = RgbImage::new(size[0], size[1]);
+    let (w, h) = img.dimensions();
     let (sender, receiver) = channel::<(u32, Vec<Rgb::<u8>>)>();
-    let file: String = file.into();
+    // Get the address of the image in a mutex,
+    // knowing that the thread will be joined before returning.
+    let img_mutex = Mutex::new(img as *mut RgbImage as usize);
     let join = std::thread::spawn(move || {
-        use std::io::Write;
-
-        let mut row_count = size[1];
+        let mut img_guard = img_mutex.lock().unwrap();
+        let img = unsafe {&mut *(*img_guard.deref_mut() as *mut RgbImage)};
+        let mut row_count = h;
         'outer: loop {
             std::thread::sleep(std::time::Duration::from_millis(500));
             let mut got_any = false;
@@ -1287,15 +1324,13 @@ pub fn wasm_par_gen<T>(cpus: u8, rt: &Runtime<T>, color: Color, file: &str, size
                     img.put_pixel(x as u32, y, pixel);
                 }
                 row_count -= 1;
-                let _ = std::io::stderr().flush();
                 if row_count == 0 {break 'outer};
             }
             if got_any {
-                eprintln!("{}%", 100.0 * ((size[1] - row_count) as f64 / size[1] as f64));
-                img.save(&file).unwrap()
+                report(img, (h - row_count) as f64 / h as f64);
             };
         }
-        img.save(&file).unwrap();
+        drop(img_guard);
     });
 
     let y_iter: Arc<Mutex<u32>> = Arc::new(0.into());
@@ -1318,12 +1353,12 @@ pub fn wasm_par_gen<T>(cpus: u8, rt: &Runtime<T>, color: Color, file: &str, size
             loop {
                 let mut y_write = y_iter.lock().unwrap();
                 let y = *y_write;
-                if *y_write >= size[1] {break}
+                if *y_write >= h {break}
                 *y_write += 1;
                 drop(y_write);
 
                 let ref mut cache = Cache::new();
-                let mut res = vec![Rgb([0; 3]); size[0] as usize];
+                let mut res = vec![Rgb([0; 3]); w as usize];
                 for (x, pixel) in res.iter_mut().enumerate() {
                     cache.clear_dep_x();
                     let p = [x as f64, y as f64];
@@ -1342,6 +1377,21 @@ pub fn wasm_par_gen<T>(cpus: u8, rt: &Runtime<T>, color: Color, file: &str, size
 
     for th in threads.into_iter() {th.join().unwrap()};
     join.join().unwrap();
+}
+
+/// Render using WASM parallel generation.
+pub fn wasm_par_gen<T>(cpus: u8, rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
+    where T: 'static + Clone + Send + Sync,
+{
+    let file2 = file.to_string();
+    let mut img = RgbImage::new(size[0], size[1]);
+    wasm_par_gen_to_image(cpus, rt, color, &mut img, move |img, progress| {
+        use std::io::Write;
+        eprintln!("{:.2} %", 100.0 * progress);
+        let _ = std::io::stderr().flush();
+        img.save(&file2).unwrap();
+    });
+    img.save(&file).unwrap();
 }
 
 /// Save to file.
