@@ -319,24 +319,13 @@ impl fmt::Display for Expr {
 
                     match token {
                         TokenExpr(a) => write!(w, "{}", a)?,
-                        StartParens => {
-                            write!(w, "(")?;
-                        }
-                        EndParens => {
-                            write!(w, ")")?
-                        }
-                        StartSquareBracket => {
-                            write!(w, "[")?;
-                        }
-                        EndSquareBracket => {
-                            write!(w, "]")?;
-                        }
-                        StartCurlyBracket => {
-                            write!(w, "{{")?;
-                        }
-                        EndCurlyBracket => {
-                            write!(w, "}}")?;
-                        }
+                        Str(a) => write!(w, "{}", a)?,
+                        StartParens => write!(w, "(")?,
+                        EndParens => write!(w, ")")?,
+                        StartSquareBracket => write!(w, "[")?,
+                        EndSquareBracket => write!(w, "]")?,
+                        StartCurlyBracket => write!(w, "{{")?,
+                        EndCurlyBracket => write!(w, "}}")?,
                         Space => write!(w, " ")?,
                         Comma => write!(w, ",")?,
                         NewLine => {
@@ -368,15 +357,13 @@ impl fmt::Display for Expr {
 
 impl Expr {
     /// Returns true if expression has a given variable decoration.
-    pub fn has_decor_var(&self, var: &str) -> bool {
+    pub fn has_decor_str(&self, var: &str) -> bool {
         if let Expr::Decor(ab) = self {
             let dec = &ab.1;
             if dec.len() != 1 {return false};
 
-            if let Token::TokenExpr(v) = &dec[0] {
-                if let Expr::Var(v) = v {
-                    if &**v == var {return true}
-                }
+            if let Token::Str(v) = &dec[0] {
+                if &**v == var {return true}
             }
         }
         false

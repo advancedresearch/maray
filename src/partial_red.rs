@@ -15,7 +15,7 @@ impl Semantics for PartialRed {
         Expr::Decor(Box::new((a, vec![var("part_red").into()])))
     }
     fn has(&self, a: &Expr) -> Option<()> {
-        if a.has_decor_var("part_red") {Some(())} else {None}
+        if a.has_decor_str("part_red") {Some(())} else {None}
     }
     fn should_init(&self, a: &Expr) -> Option<()> {
         use Expr::*;

@@ -11,6 +11,8 @@ use serde::{Serialize, Deserialize};
 pub enum Token {
     /// An expression.
     TokenExpr(Expr),
+    /// A string.
+    Str(String),
     /// `(`.
     StartParens,
     /// `)`.

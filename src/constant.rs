@@ -13,7 +13,7 @@ impl Semantics for Constant {
         Expr::Decor(Box::new((a, vec![var("const").into()])))
     }
     fn has(&self, a: &Expr) -> Option<()> {
-        if a.has_decor_var("const") {Some(())} else {None}
+        if a.has_decor_str("const") {Some(())} else {None}
     }
     fn should_init(&self, a: &Expr) -> Option<()> {
         use Expr::*;
