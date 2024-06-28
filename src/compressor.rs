@@ -27,6 +27,11 @@ impl Compressor {
     pub fn count_expr(&mut self, expr: &Expr) {
         use Expr::*;
 
+        match expr {
+            X | Y | Tau | E | Nat(_) | Var(_) => return,
+            _ => {}
+        }
+
         let mut found = false;
         for term in &mut self.terms {
             if &term.0 == expr {
@@ -132,7 +137,7 @@ pub fn compress(expr: Expr) -> Expr {
         if let Some((ind, benefit)) = compressor.last_max_benefit(2, var_len, cache) {
             let id = ctx.vars.len() as u64;
             let formula = compressor.terms[ind].0.clone();
-            eprintln!("Compressed {} terms, benefit {}, {}", ctx.vars.len() + 1, benefit, formula);
+            eprintln!("Compressed {} terms, benefit {}\n  {}", ctx.vars.len() + 1, benefit, formula);
             let name = format!("a{}", id);
             var_len = name.chars().count();
             ctx.vars.push((id, formula));
