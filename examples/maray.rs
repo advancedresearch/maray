@@ -1,7 +1,9 @@
-use maray::{open, wasm_par_gen, Runtime};
+use maray::{open, gen, RenderMethod, Report, Runtime};
 use maray::textures::{self, Textures};
 use clap::{Arg, ArgAction, Command};
 use image::RgbImage;
+
+use std::time::Duration;
 
 fn main() -> anyhow::Result<()> {
     let matches = Command::new("Maray")
@@ -50,7 +52,7 @@ fn main() -> anyhow::Result<()> {
          matches.get_one::<String>("output"),
          matches.get_many::<String>("textures"))
     {
-        let cpus = u8::from_str_radix(cpus, 10)?;
+        let cpus = u32::from_str_radix(cpus, 10)?;
         let (size, color) = open(&file)?;
 
         // Set up texture functions.
@@ -66,7 +68,11 @@ fn main() -> anyhow::Result<()> {
         let rt = Runtime::<Textures>::from_parts(
             textures::Textures {images}, functions
         );
-        wasm_par_gen(cpus as u8, &rt, color, &out_file, size);
+        let method = RenderMethod::JIT {
+            threads: cpus,
+            report: Report::Duration(Duration::from_millis(500)),
+        };
+        gen(method, &rt, color, &out_file, size);
     }
     Ok(())
 }

@@ -28,7 +28,8 @@ fn main() {
     let b = mul(shape.clone(), nat(255));
 
     let rt = Runtime::new();
-    wasm_par_gen(8, &rt, [r.clone(), g, b], "test.png", size);
+    let method = RenderMethod::JIT {threads: 8, report: Report::None};
+    gen(method, &rt, [r.clone(), g, b], "test.png", size);
 
     let r_str = format!("{}", shape);
     println!("{}\n{}", r_str, r_str.chars().count());
