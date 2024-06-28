@@ -923,6 +923,14 @@ pub fn range(a: Expr, b: Expr, x: Expr) -> Expr {
 pub fn range_incl(a: Expr, b: Expr, x: Expr) -> Expr {
     mul(step_at(a, x.clone()), set_inv(step_pos_at(b, x)))
 }
+/// Clamp value.
+pub fn clamp(a: Expr, b: Expr, x: Expr) -> Expr {
+    pos(sub(x.clone(), a.clone()), pos(sub(x.clone(), b.clone()), b, x), a)
+}
+/// Clamp value to unit range.
+pub fn clamp_unit(x: Expr) -> Expr {clamp(nat(0), nat(1), x)}
+/// Clamp value to u8 range.
+pub fn clamp_u8(x: Expr) -> Expr {clamp(nat(0), nat(255), x)}
 /// Greater or equal.
 pub fn ge(a: Expr, b: Expr) -> Expr {step(sub(a, b))}
 /// Greater than.
@@ -1400,6 +1408,12 @@ mod tests {
         let a = p2_len([x(), x()]);
         assert_eq!(a.eval(0.0), 0.0);
         assert_eq!(a.eval(1.0), 2.0_f64.sqrt());
+
+        let a = clamp(nat(1), nat(5), x());
+        assert_eq!(a.eval(0.0), 1.0);
+        assert_eq!(a.eval(1.0), 1.0);
+        assert_eq!(a.eval(5.0), 5.0);
+        assert_eq!(a.eval(6.0), 5.0);
     }
 
     #[test]
