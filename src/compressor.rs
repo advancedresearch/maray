@@ -27,10 +27,7 @@ impl Compressor {
     pub fn count_expr(&mut self, expr: &Expr) {
         use Expr::*;
 
-        match expr {
-            X | Y | Tau | E | Nat(_) | Var(_) => return,
-            _ => {}
-        }
+        if is_simple_expr(expr, 2) {return};
 
         let mut found = false;
         for term in &mut self.terms {
@@ -76,6 +73,19 @@ impl Compressor {
             }
         }
         res
+    }
+}
+
+/// Returns `true` if expression is too simple to be compressed.
+pub fn is_simple_expr(e: &Expr, level: u8) -> bool {
+    use Expr::*;
+    match e {
+        X | Y | Tau | E | Nat(_) | Var(_) => true,
+        Recip(a) if level >= 1 => is_simple_expr(a, level - 1),
+        Mul(ab) if level >= 2 =>
+            is_simple_expr(&ab.0, level - 1) &&
+            is_simple_expr(&ab.1, level - 1),
+        _ => false,
     }
 }
 
