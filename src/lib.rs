@@ -28,6 +28,7 @@ pub mod var_fixer;
 #[cfg(feature = "render")]
 mod render;
 mod report;
+mod simplify;
 #[cfg(feature = "render")]
 mod wasm;
 
@@ -512,253 +513,7 @@ impl Expr {
     }
 
     /// Simplify expression.
-    pub fn simplify(self) -> Expr {
-        use Expr::*;
-
-        match self {
-            X | Y | Tau | E | Nat(_) | Var(_) => self,
-            Neg(a) => {
-                let a = a.simplify();
-                if let Some(a) = a.get_neg() {
-                    return a.clone();
-                }
-                if let Some(a) = a.get_nat() {
-                    if a == 0 {return nat(0)};
-                }
-                Neg(Box::new(a))
-            }
-            Abs(a) => Abs(Box::new(a.simplify())),
-            Recip(a) => {
-                let a = a.simplify();
-                if let Some((a, b)) = a.get_div() {
-                    return div(b.clone(), a.clone()).simplify();
-                }
-                if let Some(a) = a.get_neg() {
-                    return neg(recip(a.clone())).simplify();
-                }
-                if let Some(a) = a.get_recip() {
-                    return a.clone().simplify();
-                }
-                Recip(Box::new(a))
-            }
-            Sqrt(a) => Sqrt(Box::new(a.simplify())),
-            Step(a) => {
-                let a = a.simplify();
-                if a.get_nat().is_some() {
-                    return nat(1);
-                }
-                if let Some(a) = a.get_neg() {
-                    if let Some(a) = a.get_nat() {
-                        return if a == 0 {nat(1)} else {nat(0)};
-                    }
-                }
-                Step(Box::new(a))
-            }
-            Sin(a) => {
-                let a = a.simplify();
-                if let Tau = a {return nat(0)};
-                if let Some((a, b)) = a.get_add() {
-                    if let Tau = a {return Sin(Box::new(b.clone()))};
-                    if let Tau = b {return Sin(Box::new(a.clone()))};
-                }
-                Sin(Box::new(a))
-            }
-            Exp(a) => {
-                let a = a.simplify();
-                if let Some(a) = a.get_nat() {
-                    if a == 0 {return nat(1)};
-                    if a == 1 {return E};
-                }
-                Exp(Box::new(a))
-            }
-            Ln(a) => Ln(Box::new(a.simplify())),
-            Add(ab) => {
-                let a = ab.0.simplify();
-                let b = ab.1.simplify();
-                if let Some(b) = b.get_neg() {
-                    if &a == b {return Nat(0)}
-                    if b.is_zero() {return a}
-                    if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
-                        if a >= b {
-                            return Nat(a - b);
-                        } else {
-                            return neg(Nat(b - a));
-                        }
-                    }
-                    if let (Some((a0, a1)), Some((b0, b1))) = (a.get_div(), b.get_div()) {
-                        if a1 == b1 {
-                            return div(sub(a0.clone(), b0.clone()), a1.clone()).simplify();
-                        } else {
-                            return div(sub(mul(a0.clone(), b1.clone()), mul(a1.clone(), b0.clone())),
-                                mul(a1.clone(), b1.clone())).simplify();
-                        }
-                    }
-                    if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_recip()) {
-                        if a1 == b {
-                            return div(sub(a0.clone(), nat(1)), a1.clone()).simplify();
-                        } else {
-                            return div(sub(mul(a0.clone(), b.clone()), a1.clone()),
-                                mul(a1.clone(), b.clone())).simplify();
-                        }
-                    }
-                    if let (Some(a), Some((b0, b1))) = (a.get_recip(), b.get_div()) {
-                        if a == b1 {
-                            return div(sub(nat(1), b0.clone()), b1.clone()).simplify();
-                        } else {
-                            return div(sub(b1.clone(), mul(a.clone(), b0.clone())),
-                                mul(a.clone(), b1.clone())).simplify();
-                        }
-                    }
-                    if let (Some(a), Some(b)) = (a.get_recip(), b.get_recip()) {
-                        return div(sub(b.clone(), a.clone()), mul(a.clone(), b.clone())).simplify();
-                    }
-                    if let (true, Some((b0, b1))) = (a.is_one(), b.get_div()) {
-                        return div(sub(b1.clone(), b0.clone()), b1.clone()).simplify();
-                    }
-                    if let (Some((a0, a1)), true) = (a.get_div(), b.is_one()) {
-                        return div(sub(a0.clone(), a1.clone()), a1.clone()).simplify();
-                    }
-                    if let (Some(a), Some((b0, b1))) = (a.get_nat(), b.get_div()) {
-                        return div(sub(mul(nat(a), b1.clone()), b0.clone()), b1.clone()).simplify();
-                    }
-                }
-                if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
-                    return Nat(a + b);
-                }
-                if let (Some(a), Some(b)) = (a.get_recip(), b.get_recip()) {
-                    return div(add(a.clone(), b.clone()), mul(a.clone(), b.clone())).simplify()
-                }
-                if let (true, Some(b)) = (a.is_one(), b.get_neg()) {
-                    if let Some(b) = b.get_recip() {
-                        return div(sub(b.clone(), nat(1)), b.clone()).simplify();
-                    }
-                }
-                if let (Some(a), Some((b0, b1))) = (a.get_recip(), b.get_div()) {
-                    if a == b1 {
-                        return div(add(nat(1), b0.clone()), a.clone()).simplify();
-                    } else {
-                        return div(
-                            add(b1.clone(), mul(a.clone(), b0.clone())),
-                            mul(a.clone(), b1.clone())).simplify();
-                    }
-                }
-                if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_recip()) {
-                    if a1 == b {
-                        return div(add(a0.clone(), nat(1)), b.clone()).simplify();
-                    } else {
-                        return div(add(mul(a0.clone(), b.clone()), a1.clone()),
-                            mul(a1.clone(), b.clone())).simplify();
-                    }
-                }
-                if let (Some((a0, a1)), Some((b0, b1))) = (a.get_div(), b.get_div()) {
-                    if a1 == b1 {
-                        return div(add(a0.clone(), b0.clone()), a1.clone()).simplify();
-                    } else {
-                        return div(add(mul(a0.clone(), b1.clone()), mul(a1.clone(), b0.clone())),
-                            mul(a1.clone(), b1.clone())).simplify();
-                    }
-                }
-                if let (Some(a), Some((b0, b1))) = (a.get_nat(), b.get_div()) {
-                    return div(add(mul(nat(a), b1.clone()), b0.clone()), b1.clone()).simplify();
-                }
-                if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_nat()) {
-                    return div(add(a0.clone(), mul(a1.clone(), nat(b))), a1.clone()).simplify();
-                }
-                if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_neg()) {
-                    if let Some(b) = b.get_nat() {
-                        return div(sub(a0.clone(), mul(a1.clone(), nat(b))), a1.clone()).simplify();
-                    }
-                }
-                if let (Some(a), None) = (a.get_neg(), b.get_neg()) {
-                    return sub(b, a.clone()).simplify();
-                }
-                if a.is_zero() {return b}
-                if b.is_zero() {return a}
-                Add(Box::new((a, b)))
-            }
-            Mul(ab) => {
-                let a = ab.0.simplify();
-                let b = ab.1.simplify();
-                if a.is_zero() || b.is_zero() {return Nat(0)};
-                if let (Some(a), Some(b)) = (a.get_recip(), b.get_recip()) {
-                    return Recip(Box::new(Mul(Box::new((a.clone(), b.clone()))))).simplify();
-                }
-                if let Some(b) = b.get_recip() {
-                    if a == *b {return Nat(1)};
-                    if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
-                        if a % b == 0 {return nat(a / b)};
-                        if a % 2 == 0 && b % 2 == 0 {
-                            return div(nat(a / 2), nat(b / 2)).simplify();
-                        }
-                        if a % 3 == 0 && b % 3 == 0 {
-                            return div(nat(a / 3), nat(b / 3)).simplify();
-                        }
-                        if a % 5 == 0 && b % 5 == 0 {
-                            return div(nat(a / 5), nat(b / 5)).simplify();
-                        }
-                        if a % 7 == 0 && b % 7 == 0 {
-                            return div(nat(a / 7), nat(b / 7)).simplify();
-                        }
-                        if a % 11 == 0 && b % 11 == 0 {
-                            return div(nat(a / 11), nat(b / 11)).simplify();
-                        }
-                        if a % 13 == 0 && b % 13 == 0 {
-                            return div(nat(a / 13), nat(b / 13)).simplify();
-                        }
-                    }
-                }
-                if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
-                    return Nat(a * b);
-                }
-                if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_recip()) {
-                    return div(a0.clone(), mul(a1.clone(), b.clone())).simplify();
-                }
-                if let (Some(a), Some((b0, b1))) = (a.get_recip(), b.get_div()) {
-                    return div(b0.clone(), mul(a.clone(), b1.clone())).simplify();
-                }
-                if let (Some((a0, a1)), Some((b0, b1))) = (a.get_div(), b.get_div()) {
-                    return div(mul(a0.clone(), b0.clone()), mul(a1.clone(), b1.clone())).simplify()
-                }
-                if let (Some(a), Some((b0, b1))) = (a.get_nat(), b.get_div()) {
-                    return div(mul(nat(a), b0.clone()), b1.clone()).simplify()
-                }
-                if let (Some(a), Some(b)) = (a.get_neg(), b.get_neg()) {
-                    return mul(a.clone(), b.clone()).simplify();
-                }
-                if let Some(a) = a.get_neg() {
-                    return neg(mul(a.clone(), b)).simplify();
-                }
-                if let Some(b) = b.get_neg() {
-                    return neg(mul(a, b.clone())).simplify();
-                }
-                if let Some((a0, a1)) = a.get_div() {
-                    return div(mul(a0.clone(), b), a1.clone()).simplify();
-                }
-                else if a.is_one() {b}
-                else if b.is_one() {a}
-                else {Mul(Box::new((a, b)))}
-            }
-            Max(ab) => {
-                let a = ab.0.simplify();
-                let b = ab.1.simplify();
-                if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
-                    return Nat(if a >= b {a} else {b});
-                }
-                Max(Box::new((a, b)))
-            }
-            Min(ab) => {
-                let a = ab.0.simplify();
-                let b = ab.1.simplify();
-                if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
-                    return Nat(if a <= b {a} else {b});
-                }
-                Min(Box::new((a, b)))
-            }
-            Let(_) => self,
-            Decor(ab) => Decor(Box::new((ab.0.simplify(), ab.1.clone()))),
-            App(abc) => App(Box::new((abc.0, abc.1.simplify(), abc.2.simplify()))),
-        }
-    }
+    pub fn simplify(self) -> Expr {simplify::run(self)}
 
     /// Evaluate X with Y set to zero.
     pub fn eval(&self, v: f64) -> f64 {
@@ -1419,7 +1174,11 @@ mod tests {
         let a = sub(div(nat(2), nat(5)), recip(nat(3)));
         assert_eq!(a.simplify(), recip(nat(15)));
 
-        let a = sub(recip(nat(3)), div(nat(2), nat(5)));
+        // 1/3 - 2/5
+        // (5*1 - 3*2) / (3*5)
+        // (5 - 6) / 15
+        // -1/15
+        let a = recip(nat(3)) - nat(2) / nat(5);
         assert_eq!(a.simplify(), neg(recip(nat(15))));
 
         let a = sub(div(nat(2), nat(5)), div(nat(1), nat(5)));
@@ -1522,6 +1281,53 @@ mod tests {
 
         let a = nat(2)/nat(3)+nat(6);
         assert_eq!(a.simplify(), nat(20) / nat(3));
+
+        let a = recip(nat(2)) + recip(nat(3));
+        assert_eq!(a.simplify(), nat(5) / nat(6));
+
+        let a = recip(nat(2)) - recip(nat(2));
+        assert_eq!(a.simplify(), nat(0));
+
+        let a = neg(nat(2)) * neg(nat(3));
+        assert_eq!(a.simplify(), nat(6));
+
+        let a = neg(recip(nat(2))) * neg(nat(3));
+        assert_eq!(a.simplify(), div(nat(3), nat(2)));
+
+        // -1/2 - -3
+        // -1/2 + 3
+        // 3 - 1/2
+        // (3*2 - 1)/2
+        // 5/2
+        let a = neg(recip(nat(2))) - neg(nat(3));
+        assert_eq!(a.simplify(), nat(5) / nat(2));
+
+        let a = neg(x()) * x();
+        assert_eq!(a.simplify(), neg(square(x())));
+
+        let a = x() * neg(x());
+        assert_eq!(a.simplify(), neg(square(x())));
+
+        let a = neg(x()) * y();
+        assert_eq!(a.simplify(), neg(x() * y()));
+
+        let a = x() * neg(y());
+        assert_eq!(a.simplify(), neg(x() * y()));
+
+        let a = neg(x()) + y();
+        assert_eq!(a.simplify(), y() - x());
+
+        let a = x() + neg(y());
+        assert_eq!(a.simplify(), x() - y());
+
+        let a = (x() / nat(2)) * (y() / nat(2));
+        assert_eq!(a.simplify(), (x() * y()) / nat(4));
+
+        let a = (x() / nat(2)) * y();
+        assert_eq!(a.simplify(), (x() * y()) / nat(2));
+
+        let a = x() * (y() / nat(2));
+        assert_eq!(a.simplify(), (x() * y()) / nat(2));
     }
 
     #[test]
