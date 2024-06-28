@@ -194,7 +194,7 @@ impl fmt::Display for Expr {
             Y => write!(w, "y")?,
             Tau => write!(w, "τ")?,
             E => write!(w, "𝐞")?,
-            Var(name) => write!(w, "{}", name)?,
+            Var(name) => write!(w, "${}", name)?,
             Nat(n) => write!(w, "{}", n)?,
             Neg(a) => {
                 if a.needs_parens() {
@@ -304,7 +304,7 @@ impl fmt::Display for Expr {
                 let ctx = &ab.0;
                 write!(w, "{}\nwhere\n", ab.1)?;
                 for var in &ctx.vars {
-                    write!(w, "  {} = {}\n", var.0, var.1)?;
+                    write!(w, "  ${} = {}\n", var.0, var.1)?;
                 }
             }
             Decor(ab) => {
