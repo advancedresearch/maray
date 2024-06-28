@@ -32,6 +32,11 @@ For the formula to get the `id` of a function, see the `textures` module.
 
 When using Maray as a library, you can customize the runtime.
 
+### Using Maray as a library
+
+Maray has a Cargo default feature flag "render" which can be turned off.
+This is useful when only needing the library to generate content.
+
 ### About Maray
 
 Maray is a binary format for ray tracing scenes that uses basic math expressions.

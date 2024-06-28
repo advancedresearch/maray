@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
 
     let matches = Command::new("Maray")
         .about("JIT Ray Tracing using basic math")
-        .version("0.1")
+        .version("0.3")
         .arg(
             Arg::new("cpus")
                 .short('c')
