@@ -838,6 +838,65 @@ impl Expr {
         }
     }
 
+    /// Gets the variable id range (inclusive).
+    pub fn var_range(&self) -> [u64; 2] {
+        use Expr::*;
+
+        match self {
+            X | Y | Tau | E | Nat(_) => [0, 0],
+            Var(n) => [*n, *n + 1],
+            Neg(a) | Abs(a) | Recip(a) | Sqrt(a) |
+            Step(a) | Sin(a) | Exp(a) | Ln(a) => a.var_range(),
+            Add(ab) | Mul(ab) | Max(ab) | Min(ab) => {
+                var_range_union(ab.0.var_range(), ab.1.var_range())
+            }
+            Let(ab) => {
+                let ctx = &ab.0;
+                let mut range = ab.1.var_range();
+                for var in &ctx.vars {
+                    range = var_range_union(range, [var.0, var.0 + 1]);
+                    range = var_range_union(range, var.1.var_range());
+                }
+                range
+            }
+            Decor(ab) => ab.0.var_range(),
+            App(abc) => {
+                var_range_union(abc.1.var_range(), abc.2.var_range())
+            }
+        }
+    }
+
+    /// Transforms variable ids with offset.
+    pub fn var_offset(self, off: i64) -> Expr {
+        use Expr::*;
+
+        match self {
+            X | Y | Tau | E | Nat(_) => self,
+            Var(n) => Var((n as i64 + off) as u64),
+            Neg(a) => Neg(Box::new(a.var_offset(off))),
+            Abs(a) => Abs(Box::new(a.var_offset(off))),
+            Recip(a) => Recip(Box::new(a.var_offset(off))),
+            Sqrt(a) => Sqrt(Box::new(a.var_offset(off))),
+            Step(a) => Step(Box::new(a.var_offset(off))),
+            Sin(a) => Sin(Box::new(a.var_offset(off))),
+            Exp(a) => Exp(Box::new(a.var_offset(off))),
+            Ln(a) => Ln(Box::new(a.var_offset(off))),
+            Add(ab) => Add(Box::new((ab.0.var_offset(off), ab.1.var_offset(off)))),
+            Mul(ab) => Mul(Box::new((ab.0.var_offset(off), ab.1.var_offset(off)))),
+            Max(ab) => Max(Box::new((ab.0.var_offset(off), ab.1.var_offset(off)))),
+            Min(ab) => Min(Box::new((ab.0.var_offset(off), ab.1.var_offset(off)))),
+            Let(mut ab) => {
+                for var in &mut ab.0.vars {
+                    var.0 = (var.0 as i64 + off) as u64;
+                    var.1 = var.1.clone().var_offset(off);
+                }
+                Let(Box::new((ab.0, ab.1.var_offset(off))))
+            }
+            Decor(ab) => Decor(Box::new((ab.0.var_offset(off), ab.1))),
+            App(abc) => App(Box::new((abc.0, abc.1.var_offset(off), abc.2.var_offset(off)))),
+        }
+    }
+
     /// Translate in 2D.
     pub fn translate(&self, off: Point2) -> Expr {
         self.subst2(&p2_sub([x(), y()], off))
@@ -867,6 +926,13 @@ impl Expr {
     pub fn rotate_at(&self, off: Point2, rad: Expr) -> Expr {
         self.translate(p2_neg(off.clone())).rotate(rad).translate(off)
     }
+}
+
+/// Gets the variable id range union.
+pub fn var_range_union(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
+    if a[1] - a[0] == 0 {b}
+    else if b[1] - b[0] == 0 {a}
+    else {[a[0].min(b[0]), a[1].max(b[1])]}
 }
 
 /// Call some external function.
