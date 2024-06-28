@@ -126,7 +126,7 @@ pub fn wasm_par_gen_to_image<T, F>(
         let mut row_count = h;
         let ref mut rs = r.start();
         'outer: loop {
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::thread::sleep(std::time::Duration::from_millis(10));
             let mut got_any: Option<u32> = None;
             while let Ok((y, row)) = receiver.try_recv() {
                 if got_any.is_none() {
@@ -164,6 +164,7 @@ pub fn wasm_par_gen_to_image<T, F>(
             let mut cg = Wasm::from_expr::<T>(&color[1]).unwrap();
             let mut cb = Wasm::from_expr::<T>(&color[2]).unwrap();
 
+            let mut res = vec![Rgb([0; 3]); w as usize];
             loop {
                 let mut y_write = y_iter.lock().unwrap();
                 let y = *y_write;
@@ -172,7 +173,6 @@ pub fn wasm_par_gen_to_image<T, F>(
                 drop(y_write);
 
                 let ref mut cache = Cache::new();
-                let mut res = vec![Rgb([0; 3]); w as usize];
                 for (x, pixel) in res.iter_mut().enumerate() {
                     cache.clear_dep_x();
                     let p = [x as f64, y as f64];
@@ -181,7 +181,7 @@ pub fn wasm_par_gen_to_image<T, F>(
                     let b = cb.main.call(&mut cb.store, p[0], p[1]).unwrap() as u8;
                     *pixel = Rgb([r, g, b]);
                 }
-                sender.send((y, res)).unwrap();
+                sender.send((y, res.clone())).unwrap();
             }
 
             drop(rt_guard);
