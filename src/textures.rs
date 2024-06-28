@@ -1,8 +1,10 @@
 //! A runtime context for a list of textures.
 
+#[cfg(feature = "render")]
 use image::RgbImage;
 
 /// Stores a list of RGB images.
+#[cfg(feature = "render")]
 #[derive(Clone)]
 pub struct Textures {
     /// The list of images.
@@ -21,6 +23,7 @@ pub fn image_width(img: usize) -> u32 {(img as u32) * ALIGN + 3}
 pub fn image_height(img: usize) -> u32 {(img as u32) * ALIGN + 4}
 
 /// Looks up color channel by `id = image * 3 + channel`.
+#[cfg(feature = "render")]
 pub fn fun_color_channel(ctx: &Textures, id: u32, x: f64, y: f64) -> f64 {
     let image = &ctx.images[(id / ALIGN) as usize];
     let (w, h) = image.dimensions();
@@ -33,18 +36,21 @@ pub fn fun_color_channel(ctx: &Textures, id: u32, x: f64, y: f64) -> f64 {
 }
 
 /// Looks up image width.
+#[cfg(feature = "render")]
 pub fn fun_image_width(ctx: &Textures, id: u32, _: f64, _: f64) -> f64 {
     let image = &ctx.images[(id / ALIGN) as usize];
     image.dimensions().0 as f64
 }
 
 /// Looks up image height.
+#[cfg(feature = "render")]
 pub fn fun_image_height(ctx: &Textures, id: u32, _: f64, _: f64) -> f64 {
     let image = &ctx.images[(id / ALIGN) as usize];
     image.dimensions().1 as f64
 }
 
 /// Generate list of functions for textures.
+#[cfg(feature = "render")]
 pub fn functions(n: usize) -> Vec<fn(&Textures, u32, f64, f64) -> f64> {
     let mut functions: Vec<fn(&Textures, u32, f64, f64) -> f64> =
         Vec::with_capacity(n * ALIGN as usize);

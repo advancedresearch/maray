@@ -1,6 +1,6 @@
 //! Wasm generation.
 
-use wasmer::{Store, Module, Instance, imports, Imports, TypedFunction};
+use wasmer::{Store, Module, Instance, imports, TypedFunction};
 use crate::semantics::{BinOp, UnOp};
 use crate::{Context, Expr, Runtime};
 
@@ -125,12 +125,6 @@ pub fn gen_expr(e: &Expr) -> String {
 pub struct Wasm {
     /// WASM store.
     pub store: Store,
-    /// WASM module.
-    pub module: Module,
-    /// Imported functions.
-    pub imports: Imports,
-    /// The WASM instance.
-    pub instance: Instance,
     /// The render function.
     pub main: TypedFunction<(f64, f64), f64>,
 }
@@ -157,9 +151,6 @@ impl Wasm {
 
         Ok(Wasm {
             store,
-            module,
-            imports,
-            instance,
             main: f,
         })
     }

@@ -1,11 +1,11 @@
-use maray::{open, gen, RenderMethod, Report, Runtime};
-use maray::textures::{self, Textures};
-use clap::{Arg, ArgAction, Command};
-use image::RgbImage;
-
-use std::time::Duration;
-
+#[cfg(feature = "render")]
 fn main() -> anyhow::Result<()> {
+    use maray::{open, gen, RenderMethod, Report, Runtime};
+    use maray::textures::{self, Textures};
+    use clap::{Arg, ArgAction, Command};
+    use image::RgbImage;
+    use std::time::Duration;
+
     let matches = Command::new("Maray")
         .about("JIT Ray Tracing using basic math")
         .version("0.1")
@@ -76,3 +76,6 @@ fn main() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(not(feature = "render"))]
+fn main() {}

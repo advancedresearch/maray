@@ -5,6 +5,7 @@ use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use serde::{Serialize, Deserialize};
+#[cfg(feature = "render")]
 use image::{RgbImage, Rgb};
 
 pub use report::*;
@@ -22,10 +23,12 @@ pub mod semantics;
 pub mod sd;
 pub mod textures;
 pub mod token;
-pub mod wasm;
 
+#[cfg(feature = "render")]
 mod render;
 mod report;
+#[cfg(feature = "render")]
+mod wasm;
 
 /// A parameteric point in 2 dimensions.
 pub type Point2 = [Expr; 2];
@@ -1215,6 +1218,7 @@ pub enum RenderMethod {
 }
 
 /// Render using method, generate to file.
+#[cfg(feature = "render")]
 pub fn gen_to_image<T, F>(
     method: RenderMethod,
     rt: &Runtime<T>,
@@ -1236,6 +1240,7 @@ pub fn gen_to_image<T, F>(
 }
 
 /// Render using method, generate to file.
+#[cfg(feature = "render")]
 pub fn gen<T>(method: RenderMethod, rt: &Runtime<T>, color: Color, file: &str, size: [u32; 2])
     where T: 'static + Clone + Send + Sync,
 {

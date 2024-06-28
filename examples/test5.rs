@@ -1,7 +1,8 @@
-use maray::*;
-use std::sync::Arc;
-
+#[cfg(feature = "render")]
 fn main() {
+    use maray::*;
+    use std::sync::Arc;
+
     let rt = Runtime {
         functions: vec![
             ext_test,
@@ -21,3 +22,6 @@ fn main() {
 }
 
 pub fn ext_test(ctx: &f64, _id: u32, _x: f64, _y: f64) -> f64 {*ctx}
+
+#[cfg(not(feature = "render"))]
+fn main() {}

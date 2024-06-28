@@ -1,7 +1,8 @@
-use maray::*;
-use maray::sd::*;
-
+#[cfg(feature = "render")]
 fn main() {
+    use maray::*;
+    use maray::sd::*;
+    
     let size: [u32; 2] = [512; 2];
 
     let fx = div(x(), nat(size[0] as u64));
@@ -34,3 +35,6 @@ fn main() {
     let r_str = format!("{}", shape);
     println!("{}\n{}", r_str, r_str.chars().count());
 }
+
+#[cfg(not(feature = "render"))]
+fn main() {}
