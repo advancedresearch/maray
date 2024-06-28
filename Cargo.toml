@@ -1,6 +1,6 @@
 [package]
 name = "maray"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 keywords = ["advancedresearch", "jit", "ray", "tracing", "math"]
 description = "JIT Ray Tracing using basic math"
