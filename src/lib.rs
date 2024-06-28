@@ -518,13 +518,14 @@ impl Expr {
         match self {
             X | Y | Tau | E | Nat(_) | Var(_) => self,
             Neg(a) => {
+                let a = a.simplify();
                 if let Some(a) = a.get_neg() {
-                    return a.clone().simplify();
+                    return a.clone();
                 }
                 if let Some(a) = a.get_nat() {
                     if a == 0 {return nat(0)};
                 }
-                Neg(Box::new(a.simplify()))
+                Neg(Box::new(a))
             }
             Abs(a) => Abs(Box::new(a.simplify())),
             Recip(a) => {
@@ -1448,6 +1449,12 @@ mod tests {
 
         let a = mul(div(nat(4), nat(5)), div(nat(1), nat(2)));
         assert_eq!(a.simplify(), div(nat(2), nat(5)));
+
+        let a = mul(nat(3), nat(0));
+        assert_eq!(a.simplify(), nat(0));
+
+        let a = neg(mul(nat(3), nat(0)));
+        assert_eq!(a.simplify(), nat(0));
 
         // Division.
         let a = div(div(nat(2), nat(5)), recip(nat(3)));
