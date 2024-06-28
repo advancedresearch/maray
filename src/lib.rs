@@ -618,6 +618,9 @@ impl Expr {
                     if let (Some((a0, a1)), true) = (a.get_div(), b.is_one()) {
                         return div(sub(a0.clone(), a1.clone()), a1.clone()).simplify();
                     }
+                    if let (Some(a), Some((b0, b1))) = (a.get_nat(), b.get_div()) {
+                        return div(sub(mul(nat(a), b1.clone()), b0.clone()), b1.clone()).simplify();
+                    }
                 }
                 if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
                     return Nat(a + b);
@@ -645,6 +648,25 @@ impl Expr {
                     } else {
                         return div(add(mul(a0.clone(), b.clone()), a1.clone()),
                             mul(a1.clone(), b.clone())).simplify();
+                    }
+                }
+                if let (Some((a0, a1)), Some((b0, b1))) = (a.get_div(), b.get_div()) {
+                    if a1 == b1 {
+                        return div(add(a0.clone(), b0.clone()), a1.clone()).simplify();
+                    } else {
+                        return div(add(mul(a0.clone(), b1.clone()), mul(a1.clone(), b0.clone())),
+                            mul(a1.clone(), b1.clone())).simplify();
+                    }
+                }
+                if let (Some(a), Some((b0, b1))) = (a.get_nat(), b.get_div()) {
+                    return div(add(mul(nat(a), b1.clone()), b0.clone()), b1.clone()).simplify();
+                }
+                if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_nat()) {
+                    return div(add(a0.clone(), mul(a1.clone(), nat(b))), a1.clone()).simplify();
+                }
+                if let (Some((a0, a1)), Some(b)) = (a.get_div(), b.get_neg()) {
+                    if let Some(b) = b.get_nat() {
+                        return div(sub(a0.clone(), mul(a1.clone(), nat(b))), a1.clone()).simplify();
                     }
                 }
                 if let (Some(a), None) = (a.get_neg(), b.get_neg()) {
@@ -1456,6 +1478,9 @@ mod tests {
         let a = neg(mul(nat(3), nat(0)));
         assert_eq!(a.simplify(), nat(0));
 
+        let a = add(nat(2), mul(nat(9), nat(1)));
+        assert_eq!(a.simplify(), nat(11));
+
         // Division.
         let a = div(div(nat(2), nat(5)), recip(nat(3)));
         assert_eq!(a.simplify(), div(nat(6), nat(5)));
@@ -1481,6 +1506,22 @@ mod tests {
         // Recip.
         let a = recip(div(nat(1), nat(3)));
         assert_eq!(a.simplify(), nat(3));
+
+        // Edge cases.
+        let a = nat(4)/nat(5)+nat(3)/nat(20);
+        assert_eq!(a.simplify(), div(nat(19), nat(20)));
+
+        let a = nat(6)-nat(2)/nat(3);
+        assert_eq!(a.simplify(), div(nat(16), nat(3)));
+
+        let a = nat(2)/nat(3)-nat(6);
+        assert_eq!(a.simplify(), neg(div(nat(16), nat(3))));
+
+        let a = nat(6)+nat(2)/nat(3);
+        assert_eq!(a.simplify(), nat(20) / nat(3));
+
+        let a = nat(2)/nat(3)+nat(6);
+        assert_eq!(a.simplify(), nat(20) / nat(3));
     }
 
     #[test]
