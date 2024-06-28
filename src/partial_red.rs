@@ -12,7 +12,7 @@ pub struct PartialRed;
 impl Semantics for PartialRed {
     type Arg = ();
     fn init(&self, a: Expr, _arg: ()) -> Expr {
-        Expr::Decor(Box::new((a, vec![var("part_red").into()])))
+        Expr::Decor(Box::new((a, vec![Token::Str("part_red".into())])))
     }
     fn has(&self, a: &Expr) -> Option<()> {
         if a.has_decor_str("part_red") {Some(())} else {None}

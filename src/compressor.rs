@@ -130,12 +130,12 @@ pub fn compress(expr: Expr) -> Expr {
         compressor.terms.clear();
         compressor.count_expr(&res);
         if let Some((ind, benefit)) = compressor.last_max_benefit(2, var_len, cache) {
-            let id = ctx.vars.len();
+            let id = ctx.vars.len() as u64;
             let formula = compressor.terms[ind].0.clone();
             eprintln!("Compressed {} terms, benefit {}, {}", ctx.vars.len() + 1, benefit, formula);
             let name = format!("a{}", id);
             var_len = name.chars().count();
-            ctx.vars.push((name, formula));
+            ctx.vars.push((id, formula));
             res = res.rewrite(&ctx);
         } else {break}
     }

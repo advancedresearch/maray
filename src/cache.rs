@@ -2,15 +2,13 @@
 
 use crate::*;
 
-use std::collections::HashMap;
-
 /// Used to improve performance of evaluation with variables.
-pub struct Cache(pub HashMap<String, (f64, bool)>);
+pub struct Cache(pub fnv::FnvHashMap<u64, (f64, bool)>);
 
 impl Cache {
     /// Creates a new cache.
     pub fn new() -> Cache {
-        Cache(HashMap::new())
+        Cache(fnv::FnvHashMap::default())
     }
 
     /// Clears cache.
@@ -22,11 +20,11 @@ impl Cache {
     }
 
     /// Return value and x-dependency.
-    pub fn val<T>(&mut self, rt: &Runtime<T>, p: [f64; 2], name: &String, ctx: &Context) -> (f64, bool) {
-        if let Some(v) = self.0.get(name) {*v}
+    pub fn val<T>(&mut self, rt: &Runtime<T>, p: [f64; 2], name: u64, ctx: &Context) -> (f64, bool) {
+        if let Some(v) = self.0.get(&name) {*v}
         else {
             for var in &ctx.vars {
-                if &var.0 == name {
+                if var.0 == name {
                     let v = var.1.eval2(rt, p, ctx, self);
                     let dep_x = var.1.dep_x(rt, p, ctx, self);
                     self.0.insert(name.clone(), (v, dep_x));

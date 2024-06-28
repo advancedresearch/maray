@@ -1156,6 +1156,7 @@ dependencies = [
  "bincode",
  "clap",
  "current",
+ "fnv",
  "image",
  "rayon",
  "serde",

@@ -79,7 +79,7 @@ pub fn gen_vars(ctx: &Context) -> String {
     for var in &ctx.vars {
         res.push_str(&gen_expr(&var.1));
         res.push_str("\nset_local $");
-        res.push_str(&var.0);
+        res.push_str(&format!("{}", var.0));
         res.push_str("\n");
     }
     res
@@ -111,7 +111,7 @@ pub fn gen_expr(e: &Expr) -> String {
             let mut s = String::new();
             for var in &ab.0.vars {
                 s.push_str("(local $");
-                s.push_str(&var.0);
+                s.push_str(&format!("{}", var.0));
                 s.push_str(" f64) ");
             }
             format!("{}\n{}\n{}", s, gen_vars(&ab.0), gen_expr(&ab.1))

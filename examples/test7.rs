@@ -6,7 +6,7 @@ fn main() {
     let expr = nat(255) * x() / nat(size[0] as u64);
     let rt = Runtime::new();
     let color = [expr.clone(), expr.clone(), expr.clone()];
-    let method = RenderMethod::SingleInterpreted {report: Report::Row(10)};
+    let method = RenderMethod::JIT {threads: 1, report: Report::Row(10)};
     gen(method, &rt, color, "test.png", size);
 }
 

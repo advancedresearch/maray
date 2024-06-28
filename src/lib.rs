@@ -44,7 +44,7 @@ pub type Color = [Expr; 3];
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Context {
     /// Variables and their expressions.
-    pub vars: Vec<(String, Expr)>,
+    pub vars: Vec<(u64, Expr)>,
 }
 
 impl Context {
@@ -102,7 +102,7 @@ pub enum Expr {
     /// Euler's constant.
     E,
     /// Variable.
-    Var(String),
+    Var(u64),
     /// Natural number.
     Nat(u64),
     /// Negative.
@@ -487,7 +487,7 @@ impl Expr {
         use Expr::*;
 
         for var in &ctx.vars {
-            if var.1 == self {return Var(var.0.clone())}
+            if var.1 == self {return Var(var.0)}
         }
 
         match self {
@@ -751,7 +751,7 @@ impl Expr {
             Y => v[1],
             Tau => 6.283185307179586,
             E => 2.718281828459045,
-            Var(name) => cache.val(rt, v, name, ctx).0,
+            Var(name) => cache.val(rt, v, *name, ctx).0,
             Nat(n) => *n as f64,
             Neg(a) => -a.eval2(rt, v, ctx, cache),
             Abs(a) => a.eval2(rt, v, ctx, cache).abs(),
@@ -789,7 +789,7 @@ impl Expr {
         match self {
             X => true,
             Y | Tau | E | Nat(_) => false,
-            Var(name) => cache.val(rt, v, name, ctx).1,
+            Var(name) => cache.val(rt, v, *name, ctx).1,
             Neg(a) | Abs(a) | Recip(a) | Sqrt(a) |
             Step(a) | Sin(a) | Exp(a) | Ln(a) => a.dep_x(rt, v, ctx, cache),
             Add(ab) | Mul(ab) | Max(ab) | Min(ab) => {
@@ -875,8 +875,15 @@ pub fn app(id: u32, a: Expr, b: Expr) -> Expr {Expr::App(Box::new((id, a, b)))}
 pub fn x() -> Expr {Expr::X}
 /// Y.
 pub fn y() -> Expr {Expr::Y}
-/// Variable.
-pub fn var(v: &str) -> Expr {Expr::Var(v.into())}
+/// Variable id.
+pub fn var_id(id: u64) -> Expr {Expr::Var(id)}
+/// Variable, hashing a variable id from name.
+pub fn var(v: &str) -> Expr {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = fnv::FnvHasher::default();
+    v.hash(&mut hasher);
+    var_id(hasher.finish())
+}
 /// Tau.
 pub fn tau() -> Expr {Expr::Tau}
 /// Pi.

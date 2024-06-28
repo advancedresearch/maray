@@ -10,7 +10,7 @@ pub struct Constant;
 impl Semantics for Constant {
     type Arg = ();
     fn init(&self, a: Expr, _arg: ()) -> Expr {
-        Expr::Decor(Box::new((a, vec![var("const").into()])))
+        Expr::Decor(Box::new((a, vec![Token::Str("const".into())])))
     }
     fn has(&self, a: &Expr) -> Option<()> {
         if a.has_decor_str("const") {Some(())} else {None}

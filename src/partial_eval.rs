@@ -13,7 +13,7 @@ impl Semantics for PartialEval {
     type Arg = Expr;
     fn init(&self, a: Expr, arg: Expr) -> Expr {
         use token::Token::*;
-        Expr::Decor(Box::new((a, vec![var("part_eval").into(), Space, arg.into()])))
+        Expr::Decor(Box::new((a, vec![Token::Str("part_eval".into()), Space, arg.into()])))
     }
     fn has(&self, a: &Expr) -> Option<Expr> {
         use token::Token;
