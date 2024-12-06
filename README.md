@@ -25,7 +25,7 @@ You can use `--textures` or `-t` to specify a list of images.
 > maray -c 8 -i "input.maray" -o "output.png" -t "texture0.png" "texture1.png"
 ```
 
-Maray sets up a defaul runtime with functions for color channels (RGB)
+Maray sets up a default runtime with functions for color channels (RGB)
 and image width and height.
 
 For the formula to get the `id` of a function, see the `textures` module.
