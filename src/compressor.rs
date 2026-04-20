@@ -154,5 +154,5 @@ pub fn compress(expr: Expr) -> Expr {
             res = res.rewrite(&ctx);
         } else {break}
     }
-    let_(ctx, res)
+    if ctx.vars.len() > 0 {let_(ctx, res)} else {res}
 }
