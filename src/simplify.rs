@@ -278,6 +278,18 @@ pub fn run(expr: Expr) -> Expr {
                     return mul(nat(a1 * b), a2.clone());
                 }
             }
+            if let (Some((a1, a2)), Some(b)) = (a.get_mul(), b.get_recip()) {
+                if let (Some(mut a1), Some(mut b)) = (a1.get_nat(), b.get_nat()) {
+                    let a1 = &mut a1;
+                    let b = &mut b;
+                    let mut f = |p: u64| if *a1 % p == 0 && *b % p == 0 {
+                        *a1 /= p;
+                        *b /= p;
+                    };
+                    f(2); f(3); f(5); f(7); f(11); f(13); f(17);
+                    return div(mul(nat(*a1), a2.clone()), nat(*b));
+                }
+            }
 
             Mul(Box::new((a, b)))
         }

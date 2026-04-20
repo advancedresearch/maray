@@ -1293,6 +1293,9 @@ mod tests {
         let a = div(div(nat(2), nat(3)), nat(5));
         assert_eq!(a.simplify(), div(nat(2), nat(15)));
 
+        let a = div(mul(nat(15), x()), nat(6));
+        assert_eq!(a.simplify(), div(mul(nat(5), x()), nat(2)));
+
         // Recip.
         let a = recip(div(nat(1), nat(3)));
         assert_eq!(a.simplify(), nat(3));
