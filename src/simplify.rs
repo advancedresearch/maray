@@ -217,6 +217,12 @@ pub fn run(expr: Expr) -> Expr {
                 (None, None) => {}
             }
 
+            if let Some((c, d)) = b.get_sub() {
+                if *d == a || *d == b {
+                    return c.clone();
+                }
+            }
+
             Add(Box::new((a, b)))
         }
         Mul(ab) => {

@@ -1237,6 +1237,9 @@ mod tests {
         let a = add(div(nat(4), nat(5)), div(nat(1), nat(2)));
         assert_eq!(a.simplify(), div(nat(13), nat(10)));
 
+        let a = add(nat(1), sub(div(x(), nat(100)), nat(1)));
+        assert_eq!(a.simplify(), div(x(), nat(100)));
+
         // Multiplication.
         let a = mul(div(nat(2), nat(5)), recip(nat(3)));
         assert_eq!(a.simplify(), div(nat(2), nat(15)));
