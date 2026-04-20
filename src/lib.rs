@@ -1169,6 +1169,28 @@ mod tests {
     }
 
     #[test]
+    fn test_simplify_neg_neg() {
+        let e1 = sub(nat(0), nat(1));
+        assert_eq!(e1.clone().simplify(), neg(nat(1)));
+        let e2 = mul(e1.clone(), e1);
+        assert_eq!(e2.clone().simplify(), nat(1));
+    }
+
+    #[test]
+    fn test_barycentric() {
+        let a = [nat(0), nat(0)];
+        let b = [nat(1), nat(0)];
+        let c = [nat(1), nat(1)];
+        let tri = [a, b, c];
+        let center = [div(nat(2), nat(3)), div(nat(1), nat(3))];
+        let bary = to_barycentric(tri, center);
+        let one_third = recip(nat(3));
+        let [b1, b2, b3] = bary;
+        assert_eq!([b1.simplify(), b2.simplify(), b3.simplify()],
+            [one_third.clone(), one_third.clone(), one_third.clone()]);
+    }
+
+    #[test]
     fn test_simplify() {
         // Subtraction.
         let a = sub(div(nat(2), nat(5)), recip(nat(3)));

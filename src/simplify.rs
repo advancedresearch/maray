@@ -12,6 +12,7 @@ impl Case {
         Case::to_expr(Case::from_expr(&expr)).unwrap()
     }
 
+    /// Converts a signed case to expression.
     fn to_expr((sa, a): (bool, Case)) -> Option<Expr> {
         match a {
             Case::None => None,
@@ -22,6 +23,7 @@ impl Case {
         }.map(|n| if !sa {neg(n)} else {n})
     }
 
+    /// Gets a signed case from expression.
     fn from_expr(expr: &Expr) -> (bool, Case) {
         use Expr::*;
         match expr {
@@ -218,8 +220,10 @@ pub fn run(expr: Expr) -> Expr {
             match (Case::from_expr(&a), Case::from_expr(&b)) {
                 ((_, Case::Nat(0)), _) => return nat(0),
                 (_, (_, Case::Nat(0))) => return nat(0),
-                ((_, Case::Nat(1)), _) => return b,
-                (_, (_, Case::Nat(1))) => return a,
+                ((true, Case::Nat(1)), _) => return b,
+                (_, (true, Case::Nat(1))) => return a,
+                ((false, Case::Nat(1)), _) => return neg(b).simplify(),
+                (_, (false, Case::Nat(1))) => return neg(a).simplify(),
                 ((_, Case::None), _) | (_, (_, Case::None)) => {}
                 ((sa, Case::Nat(a)), (sb, Case::Nat(b))) =>
                     return Case::normalize(Case::mul_nat((sa, a), (sb, b))),
