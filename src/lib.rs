@@ -617,7 +617,7 @@ impl Expr {
         }
     }
 
-    /// Gets the variable id range (inclusive).
+    /// Gets the variable id range (exclusive).
     pub fn var_range(&self) -> [u64; 2] {
         use Expr::*;
 
@@ -707,7 +707,7 @@ impl Expr {
     }
 }
 
-/// Gets the variable id range union.
+/// Gets the variable id range union (exclusive).
 pub fn var_range_union(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
     if a[1] - a[0] == 0 {b}
     else if b[1] - b[0] == 0 {a}
@@ -1368,13 +1368,13 @@ mod tests {
 
         let a = step(div(nat(1), nat(2)));
         assert_eq!(a.simplify(), nat(1));
-    
+
         let a = step(neg(nat(1)));
         assert_eq!(a.simplify(), nat(0));
 
         let a = step(neg(div(nat(1), nat(2))));
         assert_eq!(a.simplify(), nat(0));
-    
+
         let a = step(neg(nat(0)));
         assert_eq!(a.simplify(), nat(1));
     }
