@@ -109,9 +109,10 @@ pub fn gen_expr(e: &Expr) -> String {
         Min(ab) => format!("{}\n{}\n{}", gen_expr(&ab.0), gen_expr(&ab.1), gen_binop(BinOp::Min)),
         Let(ab) => {
             let mut s = String::new();
-            for var in &ab.0.vars {
+            let [a, b] = e.var_range();
+            for id in a..b {
                 s.push_str("(local $");
-                s.push_str(&format!("{}", var.0));
+                s.push_str(&format!("{}", id));
                 s.push_str(" f64) ");
             }
             format!("{}\n{}\n{}", s, gen_vars(&ab.0), gen_expr(&ab.1))
