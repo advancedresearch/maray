@@ -1181,6 +1181,9 @@ mod tests {
         let a = recip(nat(3)) - nat(2) / nat(5);
         assert_eq!(a.simplify(), neg(recip(nat(15))));
 
+        let a = div(x(), nat(1));
+        assert_eq!(a.simplify(), x());
+
         let a = sub(div(nat(2), nat(5)), div(nat(1), nat(5)));
         assert_eq!(a.simplify(), recip(nat(5)));
 

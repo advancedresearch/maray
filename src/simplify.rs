@@ -150,6 +150,9 @@ pub fn run(expr: Expr) -> Expr {
             if let Some(a) = a.get_recip() {
                 return a.clone().simplify();
             }
+            if let Some(a) = a.get_nat() {
+                if a == 1 {return nat(1)};
+            }
             Recip(Box::new(a))
         }
         Sqrt(a) => Sqrt(Box::new(a.simplify())),
