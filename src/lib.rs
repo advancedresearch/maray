@@ -974,10 +974,7 @@ pub fn quad_pos(quad: [Point2; 4], uv: Point2) -> Point2 {
 /// Gets expression for inside triangle.
 pub fn inside_triangle(triangle: [Point2; 3], pos: Point2) -> Expr {
     let [b0, b1, b2] = to_barycentric(triangle, pos);
-    set_and(set_and(
-        range(nat(0), nat(1), b0),
-        range(nat(0), nat(1), b1)
-    ), range(nat(0), nat(1), b2))
+    set_and(set_and(step(b0), step(b1)), step(b2))
 }
 
 /// Gets UV coordinates in triangle.
