@@ -138,6 +138,9 @@ pub fn run(expr: Expr) -> Expr {
             if let Some(a) = a.get_nat() {
                 if a == 0 {return nat(0)};
             }
+            if let Some((a1, a2)) = a.get_sub() {
+                return sub(a2.clone(), a1.clone());
+            }
             Neg(Box::new(a))
         }
         Abs(a) => Abs(Box::new(a.simplify())),
@@ -217,6 +220,12 @@ pub fn run(expr: Expr) -> Expr {
                 (None, None) => {}
             }
 
+            if let Some((a1, a2)) = a.get_sub() {
+                if let Some((b1, b2)) = b.get_add() {
+                    if a2 == b1 {return add(a1.clone(), b2.clone())}
+                    if a2 == b2 {return add(a1.clone(), b1.clone())}
+                }
+            }
             if let Some((c, d)) = b.get_sub() {
                 if *d == a || *d == b {
                     return c.clone();
