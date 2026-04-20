@@ -273,6 +273,11 @@ pub fn run(expr: Expr) -> Expr {
                 (None, Some((b0, b1))) => return (a * b0.clone()) / b1.clone(),
                 (None, None) => {}
             }
+            if let Some((a1, a2)) = a.get_mul() {
+                if let (Some(a1), Some(b)) = (a1.get_nat(), b.get_nat()) {
+                    return mul(nat(a1 * b), a2.clone());
+                }
+            }
 
             Mul(Box::new((a, b)))
         }
