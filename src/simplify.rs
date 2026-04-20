@@ -168,6 +168,11 @@ pub fn run(expr: Expr) -> Expr {
                     return if a == 0 {nat(1)} else {nat(0)};
                 }
             }
+            match Case::from_expr(&a) {
+                (true, Case::Div(_, _)) => return nat(1),
+                (false, Case::Div(_, _)) => return nat(0),
+                _ => {}
+            }
             Step(Box::new(a))
         }
         Sin(a) => {

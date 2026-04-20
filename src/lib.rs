@@ -1356,6 +1356,27 @@ mod tests {
     }
 
     #[test]
+    fn test_simplify_step() {
+        let a = step(nat(1));
+        assert_eq!(a.simplify(), nat(1));
+
+        let a = step(div(nat(2), nat(1)));
+        assert_eq!(a.simplify(), nat(1));
+
+        let a = step(div(nat(1), nat(2)));
+        assert_eq!(a.simplify(), nat(1));
+    
+        let a = step(neg(nat(1)));
+        assert_eq!(a.simplify(), nat(0));
+
+        let a = step(neg(div(nat(1), nat(2))));
+        assert_eq!(a.simplify(), nat(0));
+    
+        let a = step(neg(nat(0)));
+        assert_eq!(a.simplify(), nat(1));
+    }
+
+    #[test]
     fn test_var_fixer() {
         let mut fix = var_fixer::VarFixer::new();
         let a = let_(Context {
