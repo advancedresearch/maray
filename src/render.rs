@@ -172,9 +172,7 @@ pub fn wasm_par_gen_to_image<T, F>(
                 *y_write += 1;
                 drop(y_write);
 
-                let ref mut cache = Cache::new();
                 for (x, pixel) in res.iter_mut().enumerate() {
-                    cache.clear_dep_x();
                     let p = [x as f64, y as f64];
                     let r = cr.main.call(&mut cr.store, p[0], p[1]).unwrap() as u8;
                     let g = cg.main.call(&mut cg.store, p[0], p[1]).unwrap() as u8;
