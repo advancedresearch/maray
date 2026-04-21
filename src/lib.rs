@@ -13,6 +13,8 @@ pub use report::*;
 use cache::Cache;
 use token::Token;
 
+mod constant_reduction;
+
 pub mod cache;
 pub mod compressor;
 pub mod constant;
@@ -400,8 +402,24 @@ impl Expr {
         }
     }
 
+    /// Get mutable reference to natural number.
+    pub(crate) fn get_nat_mut(&mut self) -> Option<&mut u64> {
+        match self {
+            Expr::Nat(n) => Some(n),
+            _ => None,
+        }
+    }
+
     /// Get negative argument.
     pub fn get_neg(&self) -> Option<&Expr> {
+        match self {
+            Expr::Neg(a) => Some(a),
+            _ => None,
+        }
+    }
+
+    /// Get mutable reference to negative argument.
+    pub(crate) fn get_neg_mut(&mut self) -> Option<&mut Expr> {
         match self {
             Expr::Neg(a) => Some(a),
             _ => None,
@@ -420,8 +438,28 @@ impl Expr {
         }
     }
 
+    /// Get mutable references to subtraction arguments.
+    pub(crate) fn get_sub_mut(&mut self) -> Option<(&mut Expr, &mut Expr)> {
+        match self {
+            Expr::Add(ab) => {
+                if let Some(b) = ab.1.get_neg_mut() {
+                    Some((&mut ab.0, b))
+                } else {None}
+            }
+            _ => None,
+        }
+    }
+
     /// Get reciprocal argument (unary division).
     pub fn get_recip(&self) -> Option<&Expr> {
+        match self {
+            Expr::Recip(a) => Some(a),
+            _ => None,
+        }
+    }
+
+    /// Get mutable reference to reciprocal argument (unary division).
+    pub(crate) fn get_recip_mut(&mut self) -> Option<&mut Expr> {
         match self {
             Expr::Recip(a) => Some(a),
             _ => None,
@@ -436,10 +474,26 @@ impl Expr {
         }
     }
 
+    /// Get mutable references to addition arguments.
+    pub(crate) fn get_add_mut(&mut self) -> Option<(&mut Expr, &mut Expr)> {
+        match self {
+            Expr::Add(ab) => Some((&mut ab.0, &mut ab.1)),
+            _ => None,
+        }
+    }
+
     /// Get multiplication arguments.
     pub fn get_mul(&self) -> Option<(&Expr, &Expr)> {
         match self {
             Expr::Mul(ab) => Some((&ab.0, &ab.1)),
+            _ => None,
+        }
+    }
+
+    /// Get mutable references to multiplication arguments.
+    pub(crate) fn get_mul_mut(&mut self) -> Option<(&mut Expr, &mut Expr)> {
+        match self {
+            Expr::Mul(ab) => Some((&mut ab.0, &mut ab.1)),
             _ => None,
         }
     }
@@ -450,6 +504,18 @@ impl Expr {
             Expr::Mul(ab) => {
                 if let Some(b) = ab.1.get_recip() {
                     Some((&ab.0, b))
+                } else {None}
+            }
+            _ => None,
+        }
+    }
+
+    /// Get mutable reference to division arguments.
+    pub(crate) fn get_div_mut(&mut self) -> Option<(&mut Expr, &mut Expr)> {
+        match self {
+            Expr::Mul(ab) => {
+                if let Some(b) = ab.1.get_recip_mut() {
+                    Some((&mut ab.0, b))
                 } else {None}
             }
             _ => None,
@@ -513,7 +579,14 @@ impl Expr {
     }
 
     /// Simplify expression.
-    pub fn simplify(self) -> Expr {simplify::run(self)}
+    pub fn simplify(self) -> Expr {
+        let mut e = simplify::run(self);
+        e.constant_reduction();
+        simplify::run(e)
+    }
+
+    /// Reduce constants by mutable reference.
+    fn constant_reduction(&mut self) -> bool {constant_reduction::run(self)}
 
     /// Evaluate X with Y set to zero.
     pub fn eval(&self, v: f64) -> f64 {
@@ -1293,8 +1366,8 @@ mod tests {
         let a = div(div(nat(2), nat(3)), nat(5));
         assert_eq!(a.simplify(), div(nat(2), nat(15)));
 
-        let a = div(mul(nat(15), x()), nat(6));
-        assert_eq!(a.simplify(), div(mul(nat(5), x()), nat(2)));
+        let a = div(mul(div(x(), nat(2)), nat(2)), nat(3));
+        assert_eq!(a.simplify(), div(x(), nat(3)));
 
         // Recip.
         let a = recip(div(nat(1), nat(3)));
@@ -1559,5 +1632,30 @@ mod tests {
             }, var_id(5)))
         ];
         assert_eq!(var_fixer::fix_color(a2), b2);
+    }
+
+    #[test]
+    fn test_constant_reduction() {
+        let mut a = div(mul(nat(15), x()), nat(6));
+        a.constant_reduction();
+        assert_eq!(a, div(mul(nat(5), x()), nat(2)));
+
+        let mut a = div(mul(nat(3264),sub(y(),nat(1))),nat(32768));
+        a.constant_reduction();
+        assert_eq!(a, div(mul(nat(51),sub(y(),nat(1))),nat(512)));
+
+        // (((77*(x/512-179/256))/256-(3264*(y/512-205/512))/32768)*524288)/47432
+        // => (77*(x/2-179)-(51*(y/4-205/4)))/5929
+        let e1 = div(x(), nat(512));
+        let e2 = div(nat(179), nat(256));
+        let e3 = mul(nat(77), sub(e1, e2));
+        let e4 = div(y(), nat(512));
+        let e5 = div(nat(205),nat(512));
+        let e6 = mul(nat(3264),sub(e4, e5));
+        let e7 = sub(div(e3, nat(256)), div(e6, nat(32768)));
+        let a = div(mul(e7,nat(524288)),nat(47432)).simplify().simplify();
+        assert_eq!(a, div(sub(mul(nat(77), sub(div(x(), nat(2)), nat(179))),
+            mul(nat(51), sub(div(y(), nat(4)), div(nat(205), nat(4))))), nat(5929)));
+
     }
 }

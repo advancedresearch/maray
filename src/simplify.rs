@@ -269,25 +269,22 @@ pub fn run(expr: Expr) -> Expr {
             match (a.get_div(), b.get_div()) {
                 (Some((a0, a1)), Some((b0, b1))) =>
                     return ((a0.clone() * b0.clone()) / (a1.clone() * b1.clone())).simplify(),
-                (Some((a0, a1)), None) => return (a0.clone() * b) / a1.clone(),
-                (None, Some((b0, b1))) => return (a * b0.clone()) / b1.clone(),
+                (Some((a0, a1)), None) => return ((a0.clone() * b) / a1.clone()).simplify(),
+                (None, Some((b0, b1))) => return ((a * b0.clone()) / b1.clone()).simplify(),
                 (None, None) => {}
+            }
+            if let Some(b) = b.get_recip() {
+                if let Some(b) = b.get_nat() {
+                    if let Some((a1, a2)) = a.get_mul() {
+                        if let Some(a2) = a2.get_nat() {
+                            return mul(div(nat(a2), nat(b)), a1.clone()).simplify();
+                        }
+                    }
+                }
             }
             if let Some((a1, a2)) = a.get_mul() {
                 if let (Some(a1), Some(b)) = (a1.get_nat(), b.get_nat()) {
-                    return mul(nat(a1 * b), a2.clone());
-                }
-            }
-            if let (Some((a1, a2)), Some(b)) = (a.get_mul(), b.get_recip()) {
-                if let (Some(mut a1), Some(mut b)) = (a1.get_nat(), b.get_nat()) {
-                    let a1 = &mut a1;
-                    let b = &mut b;
-                    let mut f = |p: u64| if *a1 % p == 0 && *b % p == 0 {
-                        *a1 /= p;
-                        *b /= p;
-                    };
-                    f(2); f(3); f(5); f(7); f(11); f(13); f(17);
-                    return div(mul(nat(*a1), a2.clone()), nat(*b));
+                    return mul(nat(a1 * b), a2.clone()).simplify();
                 }
             }
 
