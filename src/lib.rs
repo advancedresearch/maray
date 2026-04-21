@@ -831,7 +831,7 @@ pub fn step_at(a: Expr, x: Expr) -> Expr {step(sub(x, a))}
 pub fn step_pos(a: Expr) -> Expr {set_inv(step(neg(a)))}
 /// Step after `x`.
 pub fn step_pos_at(a: Expr, x: Expr) -> Expr {step_pos(sub(x, a))}
-/// If `cond` is greater or equal to zero, then return `a`, otherwise `b`.
+/// If `cond` is greater or than zero, then return `a`, otherwise `b`.
 pub fn pos(cond: Expr, a: Expr, b: Expr) -> Expr {
     lerp(b, a, step_pos(cond))
 }
