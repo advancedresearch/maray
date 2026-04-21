@@ -579,10 +579,9 @@ impl Expr {
     }
 
     /// Simplify expression.
-    pub fn simplify(self) -> Expr {
-        let mut e = simplify::run(self);
-        e.constant_reduction();
-        simplify::run(e)
+    pub fn simplify(mut self) -> Expr {
+        self.constant_reduction();
+        simplify::run(self)
     }
 
     /// Reduce constants by mutable reference.
@@ -1653,7 +1652,8 @@ mod tests {
         let e5 = div(nat(205),nat(512));
         let e6 = mul(nat(3264),sub(e4, e5));
         let e7 = sub(div(e3, nat(256)), div(e6, nat(32768)));
-        let a = div(mul(e7,nat(524288)),nat(47432)).simplify().simplify();
+        let a = div(mul(e7,nat(524288)),nat(47432))
+            .simplify().simplify().simplify().simplify().simplify();
         assert_eq!(a, div(sub(mul(nat(77), sub(div(x(), nat(2)), nat(179))),
             mul(nat(51), sub(div(y(), nat(4)), div(nat(205), nat(4))))), nat(5929)));
 
