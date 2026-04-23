@@ -163,6 +163,54 @@ pub fn compression_benefit(expr: &Expr, count: usize, var_len: usize) -> usize {
     main - cost
 }
 
+/// Flattens expression by turning `Let` into `Arc`.
+pub fn flatten(expr: Expr, ctx: Option<&Context>, mem: &mut MemoryManager) -> Expr {
+    use Expr::*;
+
+    match expr {
+        X | Y | Tau | E | Nat(_) => expr,
+        Arc(inner) => {
+            if let Some(a) = mem.get_map(inner.clone()) {
+                Arc(a)
+            } else {
+                let a = flatten((*inner).clone(), ctx, mem);
+                if &a == &*inner {Arc(inner)}
+                else {
+                    let a = mem.get(a);
+                    mem.set_map(inner, a.clone());
+                    Arc(a)
+                }
+            }
+        }
+        Neg(a) => neg(flatten(*a, ctx, mem)),
+        Abs(a) => abs(flatten(*a, ctx, mem)),
+        Recip(a) => recip(flatten(*a, ctx, mem)),
+        Sqrt(a) => sqrt(flatten(*a, ctx, mem)),
+        Step(a) => step(flatten(*a, ctx, mem)),
+        Sin(a) => sin(flatten(*a, ctx, mem)),
+        Exp(a) => exp(flatten(*a, ctx, mem)),
+        Ln(a) => ln(flatten(*a, ctx, mem)),
+        Decor(decor) => flatten(decor.0, ctx, mem),
+        App(fab) => app(fab.0, flatten(fab.1, ctx, mem), flatten(fab.2, ctx, mem)),
+        Add(ab) => add(flatten(ab.0, ctx, mem), flatten(ab.1, ctx, mem)),
+        Mul(ab) => mul(flatten(ab.0, ctx, mem), flatten(ab.1, ctx, mem)),
+        Max(ab) => max(flatten(ab.0, ctx, mem), flatten(ab.1, ctx, mem)),
+        Min(ab) => min(flatten(ab.0, ctx, mem), flatten(ab.1, ctx, mem)),
+        Let(ab) => flatten(ab.1, Some(&ab.0), mem),
+        Var(a) => {
+            if let Some(ctx) = ctx {
+                for v in &ctx.vars {
+                    if v.0 == a {
+                        let a = flatten(v.1.clone(), Some(ctx), mem);
+                        return Arc(mem.get(a))
+                    }
+                }
+            }
+            panic!("Could not find variable");
+        }
+    }
+}
+
 /// Compresses the expression.
 pub fn compress(expr: Expr, mem: &mut MemoryManager) -> Expr {
     let mut res = expr;

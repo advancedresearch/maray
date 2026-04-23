@@ -608,7 +608,9 @@ impl Expr {
 
     /// Compress expression.
     pub fn compress(self, mem: &mut MemoryManager) -> Expr {
-        compressor::compress(self, mem)
+        mem.map.clear();
+        let expr = compressor::flatten(self, None, mem);
+        compressor::compress(expr, mem)
     }
 
     /// Evaluate X with Y set to zero.
