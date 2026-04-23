@@ -573,6 +573,7 @@ impl Expr {
                     if &a == &*inner {Arc(inner)}
                     else {
                         let a = mem.get(a);
+                        mem.set_map(inner, a.clone());
                         Arc(a)
                     }
                 }
