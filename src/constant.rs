@@ -1,6 +1,7 @@
 //! Semantical constant analysis.
 
 use crate::*;
+use crate::memory_manager::MemoryManager;
 use semantics::{BinOp, Semantics, UnOp};
 
 /// Semantical constant analysis.
@@ -23,14 +24,21 @@ impl Semantics for Constant {
             _ => None,
         }
     }
-    fn propagate_unop(&self, _unop: UnOp, a: Expr, _arg: ()) -> (Expr, ()) {
+    fn propagate_unop(
+        &self,
+        _unop: UnOp,
+        a: Expr,
+        _arg: (),
+        _mem: &mut MemoryManager
+    ) -> (Expr, ()) {
         (a, ())
     }
     fn propagate_binop(
         &self,
         _binop: BinOp,
         (a, b): (Expr, Expr),
-        _args: ((), ())
+        _args: ((), ()),
+        _mem: &mut MemoryManager,
     ) -> (Expr, Expr, ()) {
         (a, b, ())
     }

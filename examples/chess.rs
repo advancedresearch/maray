@@ -1,6 +1,6 @@
 use maray::*;
-use maray::compressor::*;
 use maray::grid::*;
+use maray::memory_manager::MemoryManager;
 
 fn main() {
     let size: [u32; 2] = [1024; 2];
@@ -39,8 +39,8 @@ fn main() {
         }
     }
 
-    let shape = shape.simplify();
-    let shape = compress(shape);
+    let ref mut mem = MemoryManager::new(10_000);
+    let shape = shape.simplify(mem).compress(mem);
 
     let r = mul(shape.clone(), nat(255));
     let g = mul(shape.clone(), nat(255));

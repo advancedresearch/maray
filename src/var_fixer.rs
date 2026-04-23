@@ -26,6 +26,7 @@ impl VarFixer {
         use Expr::*;
 
         match expr {
+            Arc(inner) => self.fix((*inner).clone(), ctx),
             X | Y | Tau | E | Nat(_) => expr,
             Var(n) => {
                 for (old, new) in &*ctx {

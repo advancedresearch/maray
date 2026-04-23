@@ -1,6 +1,7 @@
 //! Semantical analysis.
 
 use crate::Expr;
+use crate::memory_manager::MemoryManager;
 
 /// Unary operator.
 #[derive(Copy, Clone)]
@@ -51,7 +52,13 @@ pub trait Semantics {
     /// Propagates unary operator.
     ///
     /// This should return the new inner expression with semantics.
-    fn propagate_unop(&self, unop: UnOp, inner: Expr, arg: Self::Arg) -> (Expr, Self::Arg);
+    fn propagate_unop(
+        &self,
+        unop: UnOp,
+        inner: Expr,
+        arg: Self::Arg,
+        mem: &mut MemoryManager
+    ) -> (Expr, Self::Arg);
     /// Propagates binary operator.
     ///
     /// This should return the new inner expression with semantics.
@@ -59,7 +66,8 @@ pub trait Semantics {
         &self,
         binop: BinOp,
         inner: (Expr, Expr),
-        args: (Self::Arg, Self::Arg)
+        args: (Self::Arg, Self::Arg),
+        mem: &mut MemoryManager,
     ) -> (Expr, Expr, Self::Arg);
 
     /// Decorate expression with semantics.
@@ -111,81 +119,85 @@ pub trait Semantics {
     }
 
     /// Propagates decor up the expression tree.
-    fn propagate(&self, a: Expr) -> Expr {
+    fn propagate(&self, a: Expr, mem: &mut MemoryManager) -> Expr {
         use Expr::*;
 
         match a {
+            Arc(inner) => {
+                let a = self.propagate((*inner).clone(), mem);
+                Arc(mem.get(a))
+            }
             X | Y | Tau | E | Var(_) | Nat(_) => a,
             Exp(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Exp, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Exp, decor_inner(b), arg, mem);
                     self.init(Exp(Box::new(new_inner)), new_arg)
                 } else {
-                    Exp(Box::new(self.propagate((**b).clone())))
+                    Exp(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Ln(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Ln, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Ln, decor_inner(b), arg, mem);
                     self.init(Ln(Box::new(new_inner)), new_arg)
                 } else {
-                    Ln(Box::new(self.propagate((**b).clone())))
+                    Ln(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Sin(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg, mem);
                     self.init(Sin(Box::new(new_inner)), new_arg)
                 } else {
-                    Sin(Box::new(self.propagate((**b).clone())))
+                    Sin(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Neg(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Neg, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Neg, decor_inner(b), arg, mem);
                     self.init(Neg(Box::new(new_inner)), new_arg)
                 } else {
-                    Neg(Box::new(self.propagate((**b).clone())))
+                    Neg(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Abs(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Abs, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Abs, decor_inner(b), arg, mem);
                     self.init(Abs(Box::new(new_inner)), new_arg)
                 } else {
-                    Abs(Box::new(self.propagate((**b).clone())))
+                    Abs(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Recip(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg, mem);
                     self.init(Recip(Box::new(new_inner)), new_arg)
                 } else {
-                    Recip(Box::new(self.propagate((**b).clone())))
+                    Recip(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Sqrt(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg, mem);
                     self.init(Sqrt(Box::new(new_inner)), new_arg)
                 } else {
-                    Sqrt(Box::new(self.propagate((**b).clone())))
+                    Sqrt(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Step(ref b) => {
                 if let Some(arg) = self.has(b) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg);
+                        self.propagate_unop(UnOp::Sin, decor_inner(b), arg, mem);
                     self.init(Step(Box::new(new_inner)), new_arg)
                 } else {
-                    Step(Box::new(self.propagate((**b).clone())))
+                    Step(Box::new(self.propagate((**b).clone(), mem)))
                 }
             }
             Add(ref ab) => {
@@ -193,11 +205,11 @@ pub trait Semantics {
                     let (a, b, new_arg) =
                         self.propagate_binop(BinOp::Add,
                             (decor_inner(&ab.0), decor_inner(&ab.1)),
-                            (arg_a, arg_b));
+                            (arg_a, arg_b), mem);
                     self.init(Add(Box::new((a, b))), new_arg)
                 } else {
-                    let a = self.propagate(ab.0.clone());
-                    let b = self.propagate(ab.1.clone());
+                    let a = self.propagate(ab.0.clone(), mem);
+                    let b = self.propagate(ab.1.clone(), mem);
                     Add(Box::new((a, b)))
                 }
             }
@@ -206,11 +218,11 @@ pub trait Semantics {
                     let (a, b, new_arg) =
                         self.propagate_binop(BinOp::Mul,
                             (decor_inner(&ab.0), decor_inner(&ab.1)),
-                            (arg_a, arg_b));
+                            (arg_a, arg_b), mem);
                     self.init(Mul(Box::new((a, b))), new_arg)
                 } else {
-                    let a = self.propagate(ab.0.clone());
-                    let b = self.propagate(ab.1.clone());
+                    let a = self.propagate(ab.0.clone(), mem);
+                    let b = self.propagate(ab.1.clone(), mem);
                     Mul(Box::new((a, b)))
                 }
             }
@@ -219,11 +231,11 @@ pub trait Semantics {
                     let (a, b, new_arg) =
                         self.propagate_binop(BinOp::Max,
                             (decor_inner(&ab.0), decor_inner(&ab.1)),
-                            (arg_a, arg_b));
+                            (arg_a, arg_b), mem);
                     self.init(Max(Box::new((a, b))), new_arg)
                 } else {
-                    let a = self.propagate(ab.0.clone());
-                    let b = self.propagate(ab.1.clone());
+                    let a = self.propagate(ab.0.clone(), mem);
+                    let b = self.propagate(ab.1.clone(), mem);
                     Max(Box::new((a, b)))
                 }
             }
@@ -232,22 +244,22 @@ pub trait Semantics {
                     let (a, b, new_arg) =
                         self.propagate_binop(BinOp::Min,
                             (decor_inner(&ab.0), decor_inner(&ab.1)),
-                            (arg_a, arg_b));
+                            (arg_a, arg_b), mem);
                     self.init(Min(Box::new((a, b))), new_arg)
                 } else {
-                    let a = self.propagate(ab.0.clone());
-                    let b = self.propagate(ab.1.clone());
+                    let a = self.propagate(ab.0.clone(), mem);
+                    let b = self.propagate(ab.1.clone(), mem);
                     Min(Box::new((a, b)))
                 }
             }
             Let(ref ab) => {
                 if let Some(arg) = self.has(&ab.1) {
                     let (new_inner, new_arg) =
-                        self.propagate_unop(UnOp::Id, decor_inner(&ab.1), arg);
+                        self.propagate_unop(UnOp::Id, decor_inner(&ab.1), arg, mem);
                     self.init(Let(Box::new((ab.0.clone(), new_inner))), new_arg)
                 } else {
                     let a = ab.0.clone();
-                    let b = self.propagate(ab.1.clone());
+                    let b = self.propagate(ab.1.clone(), mem);
                     Let(Box::new((a, b)))
                 }
             }

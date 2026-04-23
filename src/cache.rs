@@ -20,7 +20,13 @@ impl Cache {
     }
 
     /// Return value and x-dependency.
-    pub fn val<T>(&mut self, rt: &Runtime<T>, p: [f64; 2], name: u64, ctx: &Context) -> (f64, bool) {
+    pub fn val<T>(
+        &mut self,
+        rt: &Runtime<T>,
+        p: [f64; 2],
+        name: u64,
+        ctx: &Context,
+    ) -> (f64, bool) {
         if let Some(v) = self.0.get(&name) {*v}
         else {
             for var in &ctx.vars {

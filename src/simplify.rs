@@ -1,4 +1,5 @@
 use crate::*;
+use memory_manager::MemoryManager;
 
 #[derive(Debug)]
 enum Case {
@@ -87,24 +88,24 @@ impl Case {
         }
     }
 
-    fn add_div(a: (bool, u64, u64), b: (bool, u64, u64)) -> Expr {
+    fn add_div(a: (bool, u64, u64), b: (bool, u64, u64), mem: &mut MemoryManager) -> Expr {
         match (a, b) {
             ((true, a0, a1), (true, b0, b1)) =>
                 if a1 == b1 {div(nat(a0 + b0), nat(a1))}
-                else {nat(a0 * b1 + a1 * b0) / nat(a1 * b1)}.simplify(),
+                else {nat(a0 * b1 + a1 * b0) / nat(a1 * b1)}.simplify(mem),
             ((false, b0, b1), (true, a0, a1)) | ((true, a0, a1), (false, b0, b1)) =>
                 if a1 == b1 {
                     if a0 >= b0 {div(nat(a0 - b0), nat(a1))}
-                    else {neg(div(nat(b0 - a0), nat(a1)))}.simplify()
+                    else {neg(div(nat(b0 - a0), nat(a1)))}.simplify(mem)
                 }
                 else {
                     let d1 = a0 * b1;
                     let d2 = a1 * b0;
                     if d1 >= d2 {nat(d1 - d2) / nat(a1 * b1)}
-                    else {neg(nat(d2 - d1) / nat(a1 * b1))}.simplify()
+                    else {neg(nat(d2 - d1) / nat(a1 * b1))}.simplify(mem)
                 },
             ((false, a0, a1), (false, b0, b1)) =>
-                neg(nat(a0) / nat(a1) + nat(b0) / nat(b1)).simplify(),
+                neg(nat(a0) / nat(a1) + nat(b0) / nat(b1)).simplify(mem),
         }
     }
 
@@ -125,15 +126,28 @@ impl Case {
     }
 }
 
-pub fn run(expr: Expr) -> Expr {
+pub fn run(expr: Expr, mem: &mut MemoryManager) -> Expr {
     use Expr::*;
 
     match expr {
+        Arc(inner) => {
+            if let Some(a) = mem.get_map(inner.clone()) {
+                Arc(a)
+            } else {
+                let a = (*inner).clone().simplify(mem);
+                if &a == &*inner {Arc(inner)}
+                else {
+                    let a = mem.get(a);
+                    mem.set_map(inner, a.clone());
+                    Arc(a)
+                }
+            }
+        }
         X | Y | Tau | E | Nat(_) | Var(_) => expr,
         Neg(a) => {
-            let a = a.simplify();
+            let a = a.simplify(mem);
             if let Some(a) = a.get_neg() {
-                return a.clone().simplify();
+                return a.clone().simplify(mem);
             }
             if let Some(a) = a.get_nat() {
                 if a == 0 {return nat(0)};
@@ -143,26 +157,26 @@ pub fn run(expr: Expr) -> Expr {
             }
             Neg(Box::new(a))
         }
-        Abs(a) => Abs(Box::new(a.simplify())),
+        Abs(a) => Abs(Box::new(a.simplify(mem))),
         Recip(a) => {
-            let a = a.simplify();
+            let a = a.simplify(mem);
             if let Some((a, b)) = a.get_div() {
-                return div(b.clone(), a.clone()).simplify();
+                return div(b.clone(), a.clone()).simplify(mem);
             }
             if let Some(a) = a.get_neg() {
-                return neg(recip(a.clone())).simplify();
+                return neg(recip(a.clone())).simplify(mem);
             }
             if let Some(a) = a.get_recip() {
-                return a.clone().simplify();
+                return a.clone().simplify(mem);
             }
             if let Some(a) = a.get_nat() {
                 if a == 1 {return nat(1)};
             }
             Recip(Box::new(a))
         }
-        Sqrt(a) => Sqrt(Box::new(a.simplify())),
+        Sqrt(a) => Sqrt(Box::new(a.simplify(mem))),
         Step(a) => {
-            let a = a.simplify();
+            let a = a.simplify(mem);
             if a.get_nat().is_some() {
                 return nat(1);
             }
@@ -179,7 +193,7 @@ pub fn run(expr: Expr) -> Expr {
             Step(Box::new(a))
         }
         Sin(a) => {
-            let a = a.simplify();
+            let a = a.simplify(mem);
             if let Tau = a {return nat(0)};
             if let Some((a, b)) = a.get_add() {
                 if let Tau = a {return Sin(Box::new(b.clone()))};
@@ -188,17 +202,17 @@ pub fn run(expr: Expr) -> Expr {
             Sin(Box::new(a))
         }
         Exp(a) => {
-            let a = a.simplify();
+            let a = a.simplify(mem);
             if let Some(a) = a.get_nat() {
                 if a == 0 {return nat(1)};
                 if a == 1 {return E};
             }
             Exp(Box::new(a))
         }
-        Ln(a) => Ln(Box::new(a.simplify())),
+        Ln(a) => Ln(Box::new(a.simplify(mem))),
         Add(ab) => {
-            let a = ab.0.simplify();
-            let b = ab.1.simplify();
+            let a = ab.0.simplify(mem);
+            let b = ab.1.simplify(mem);
             match (Case::from_expr(&a), Case::from_expr(&b)) {
                 ((_, Case::Nat(0)), _) => return b,
                 (_, (_, Case::Nat(0))) => return a,
@@ -206,16 +220,16 @@ pub fn run(expr: Expr) -> Expr {
                 ((sa, Case::Nat(a)), (sb, Case::Nat(b))) =>
                     return Case::normalize(Case::add_nat((sa, a), (sb, b))),
                 ((sa, Case::Div(a0, a1)), (sb, Case::Div(b0, b1))) =>
-                    return Case::normalize(Case::add_div((sa, a0, a1), (sb, b0, b1))),
+                    return Case::normalize(Case::add_div((sa, a0, a1), (sb, b0, b1), mem)),
                 ((sa, Case::Nat(a)), (sb, Case::Div(b0, b1))) =>
-                    return Case::normalize(Case::add_div((sa, a * b1, b1), (sb, b0, b1))),
+                    return Case::normalize(Case::add_div((sa, a * b1, b1), (sb, b0, b1), mem)),
                 ((sa, Case::Div(a0, a1)), (sb, Case::Nat(b))) =>
-                    return Case::normalize(Case::add_div((sa, a0, a1), (sb, a1 * b, a1))),
+                    return Case::normalize(Case::add_div((sa, a0, a1), (sb, a1 * b, a1), mem)),
             }
 
             match (a.get_neg(), b.get_neg()) {
-                (Some(a), Some(b)) => return neg(add(a.clone(), b.clone())).simplify(),
-                (Some(a), None) => return sub(b, a.clone()).simplify(),
+                (Some(a), Some(b)) => return neg(add(a.clone(), b.clone())).simplify(mem),
+                (Some(a), None) => return sub(b, a.clone()).simplify(mem),
                 (None, Some(_)) => {}
                 (None, None) => {}
             }
@@ -235,15 +249,15 @@ pub fn run(expr: Expr) -> Expr {
             Add(Box::new((a, b)))
         }
         Mul(ab) => {
-            let a = ab.0.simplify();
-            let b = ab.1.simplify();
+            let a = ab.0.simplify(mem);
+            let b = ab.1.simplify(mem);
             match (Case::from_expr(&a), Case::from_expr(&b)) {
                 ((_, Case::Nat(0)), _) => return nat(0),
                 (_, (_, Case::Nat(0))) => return nat(0),
                 ((true, Case::Nat(1)), _) => return b,
                 (_, (true, Case::Nat(1))) => return a,
-                ((false, Case::Nat(1)), _) => return neg(b).simplify(),
-                (_, (false, Case::Nat(1))) => return neg(a).simplify(),
+                ((false, Case::Nat(1)), _) => return neg(b).simplify(mem),
+                (_, (false, Case::Nat(1))) => return neg(a).simplify(mem),
                 ((_, Case::None), _) | (_, (_, Case::None)) => {}
                 ((sa, Case::Nat(a)), (sb, Case::Nat(b))) =>
                     return Case::normalize(Case::mul_nat((sa, a), (sb, b))),
@@ -255,59 +269,59 @@ pub fn run(expr: Expr) -> Expr {
             }
 
             match (a.get_neg(), b.get_neg()) {
-                (Some(a), Some(b)) => return mul(a.clone(), b.clone()).simplify(),
-                (Some(a), None) => return neg(mul(a.clone(), b)).simplify(),
-                (None, Some(b)) => return neg(mul(a, b.clone())).simplify(),
+                (Some(a), Some(b)) => return mul(a.clone(), b.clone()).simplify(mem),
+                (Some(a), None) => return neg(mul(a.clone(), b)).simplify(mem),
+                (None, Some(b)) => return neg(mul(a, b.clone())).simplify(mem),
                 (None, None) => {}
             }
             match (a.get_recip(), b.get_recip()) {
-                (Some(a), Some(b)) => return recip(mul(a.clone(), b.clone())).simplify(),
-                (Some(a), None) => return div(b, a.clone()).simplify(),
+                (Some(a), Some(b)) => return recip(mul(a.clone(), b.clone())).simplify(mem),
+                (Some(a), None) => return div(b, a.clone()).simplify(mem),
                 (None, Some(_)) => {}
                 (None, None) => {}
             }
             match (a.get_div(), b.get_div()) {
                 (Some((a0, a1)), Some((b0, b1))) =>
-                    return ((a0.clone() * b0.clone()) / (a1.clone() * b1.clone())).simplify(),
-                (Some((a0, a1)), None) => return ((a0.clone() * b) / a1.clone()).simplify(),
-                (None, Some((b0, b1))) => return ((a * b0.clone()) / b1.clone()).simplify(),
+                    return ((a0.clone() * b0.clone()) / (a1.clone() * b1.clone())).simplify(mem),
+                (Some((a0, a1)), None) => return ((a0.clone() * b) / a1.clone()).simplify(mem),
+                (None, Some((b0, b1))) => return ((a * b0.clone()) / b1.clone()).simplify(mem),
                 (None, None) => {}
             }
             if let Some(b) = b.get_recip() {
                 if let Some(b) = b.get_nat() {
                     if let Some((a1, a2)) = a.get_mul() {
                         if let Some(a2) = a2.get_nat() {
-                            return mul(div(nat(a2), nat(b)), a1.clone()).simplify();
+                            return mul(div(nat(a2), nat(b)), a1.clone()).simplify(mem);
                         }
                     }
                 }
             }
             if let Some((a1, a2)) = a.get_mul() {
                 if let (Some(a1), Some(b)) = (a1.get_nat(), b.get_nat()) {
-                    return mul(nat(a1 * b), a2.clone()).simplify();
+                    return mul(nat(a1 * b), a2.clone()).simplify(mem);
                 }
             }
 
             Mul(Box::new((a, b)))
         }
         Max(ab) => {
-            let a = ab.0.simplify();
-            let b = ab.1.simplify();
+            let a = ab.0.simplify(mem);
+            let b = ab.1.simplify(mem);
             if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
                 return Nat(if a >= b {a} else {b});
             }
             Max(Box::new((a, b)))
         }
         Min(ab) => {
-            let a = ab.0.simplify();
-            let b = ab.1.simplify();
+            let a = ab.0.simplify(mem);
+            let b = ab.1.simplify(mem);
             if let (Some(a), Some(b)) = (a.get_nat(), b.get_nat()) {
                 return Nat(if a <= b {a} else {b});
             }
             Min(Box::new((a, b)))
         }
         Let(_) => expr,
-        Decor(ab) => Decor(Box::new((ab.0.simplify(), ab.1.clone()))),
-        App(abc) => App(Box::new((abc.0, abc.1.simplify(), abc.2.simplify()))),
+        Decor(ab) => Decor(Box::new((ab.0.simplify(mem), ab.1.clone()))),
+        App(abc) => App(Box::new((abc.0, abc.1.simplify(mem), abc.2.simplify(mem)))),
     }
 }

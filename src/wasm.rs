@@ -89,6 +89,7 @@ pub fn gen_vars(ctx: &Context) -> String {
 pub fn gen_expr(e: &Expr) -> String {
     use Expr::*;
     match e {
+        Arc(inner) => gen_expr(inner),
         X => "\nget_local $x".into(),
         Y => "\nget_local $y".into(),
         Tau => "f64.const 6.283185307179586".into(),

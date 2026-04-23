@@ -1,6 +1,7 @@
 //! Semantical partial reduction analysis.
 
 use crate::*;
+use crate::memory_manager::MemoryManager;
 use semantics::*;
 
 /// Semantical partial reduction.
@@ -26,15 +27,22 @@ impl Semantics for PartialRed {
             _ => None,
         }
     }
-    fn propagate_unop(&self, _unop: UnOp, a: Expr, _arg: ()) -> (Expr, ()) {
-        (a.simplify(), ())
+    fn propagate_unop(
+        &self,
+        _unop: UnOp,
+        a: Expr,
+        _arg: (),
+        mem: &mut MemoryManager
+    ) -> (Expr, ()) {
+        (a.simplify(mem), ())
     }
     fn propagate_binop(
         &self,
         _binop: BinOp,
         (a, b): (Expr, Expr),
-        _args: ((), ())
+        _args: ((), ()),
+        mem: &mut MemoryManager,
     ) -> (Expr, Expr, ()) {
-        (a.simplify(), b.simplify(), ())
+        (a.simplify(mem), b.simplify(mem), ())
     }
 }

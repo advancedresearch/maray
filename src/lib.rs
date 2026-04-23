@@ -3,6 +3,7 @@
 
 use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::sync::Arc;
 
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "render")]
@@ -12,6 +13,7 @@ pub use report::*;
 
 use cache::Cache;
 use token::Token;
+use memory_manager::MemoryManager;
 
 mod constant_reduction;
 
@@ -19,6 +21,7 @@ pub mod cache;
 pub mod compressor;
 pub mod constant;
 pub mod grid;
+pub mod memory_manager;
 pub mod partial_eval;
 pub mod partial_red;
 pub mod semantics;
@@ -97,6 +100,8 @@ impl<T> Runtime<T> {
 /// Stores expression of two variables (X and Y).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expr {
+    /// Smart pointer to save shared memory.
+    Arc(Arc<Expr>),
     /// X.
     X,
     /// Y.
@@ -193,6 +198,7 @@ impl fmt::Display for Expr {
         use Expr::*;
 
         match self {
+            Arc(inner) => write!(w, "{}", inner)?,
             X => write!(w, "x")?,
             Y => write!(w, "y")?,
             Tau => write!(w, "τ")?,
@@ -551,7 +557,7 @@ impl Expr {
     }
 
     /// Rewrite expression.
-    pub fn rewrite(self, ctx: &Context) -> Expr {
+    pub fn rewrite(self, ctx: &Context, mem: &mut MemoryManager) -> Expr {
         use Expr::*;
 
         for var in &ctx.vars {
@@ -559,33 +565,50 @@ impl Expr {
         }
 
         match self {
+            Arc(inner) => {
+                if let Some(a) = mem.get_map(inner.clone()) {
+                    Arc(a)
+                } else {
+                    let a = (*inner).clone().rewrite(ctx, mem);
+                    if &a == &*inner {Arc(inner)}
+                    else {
+                        let a = mem.get(a);
+                        Arc(a)
+                    }
+                }
+            }
             X | Y | Tau | E | Nat(_) | Var(_) => self,
-            Neg(a) => Neg(Box::new(a.rewrite(ctx))),
-            Abs(a) => Abs(Box::new(a.rewrite(ctx))),
-            Recip(a) => Recip(Box::new(a.rewrite(ctx))),
-            Sqrt(a) => Sqrt(Box::new(a.rewrite(ctx))),
-            Step(a) => Step(Box::new(a.rewrite(ctx))),
-            Sin(a) => Sin(Box::new(a.rewrite(ctx))),
-            Exp(a) => Exp(Box::new(a.rewrite(ctx))),
-            Ln(a) => Ln(Box::new(a.rewrite(ctx))),
-            Add(ab) => Add(Box::new((ab.0.rewrite(ctx), ab.1.rewrite(ctx)))),
-            Mul(ab) => Mul(Box::new((ab.0.rewrite(ctx), ab.1.rewrite(ctx)))),
-            Max(ab) => Max(Box::new((ab.0.rewrite(ctx), ab.1.rewrite(ctx)))),
-            Min(ab) => Min(Box::new((ab.0.rewrite(ctx), ab.1.rewrite(ctx)))),
+            Neg(a) => Neg(Box::new(a.rewrite(ctx, mem))),
+            Abs(a) => Abs(Box::new(a.rewrite(ctx, mem))),
+            Recip(a) => Recip(Box::new(a.rewrite(ctx, mem))),
+            Sqrt(a) => Sqrt(Box::new(a.rewrite(ctx, mem))),
+            Step(a) => Step(Box::new(a.rewrite(ctx, mem))),
+            Sin(a) => Sin(Box::new(a.rewrite(ctx, mem))),
+            Exp(a) => Exp(Box::new(a.rewrite(ctx, mem))),
+            Ln(a) => Ln(Box::new(a.rewrite(ctx, mem))),
+            Add(ab) => Add(Box::new((ab.0.rewrite(ctx, mem), ab.1.rewrite(ctx, mem)))),
+            Mul(ab) => Mul(Box::new((ab.0.rewrite(ctx, mem), ab.1.rewrite(ctx, mem)))),
+            Max(ab) => Max(Box::new((ab.0.rewrite(ctx, mem), ab.1.rewrite(ctx, mem)))),
+            Min(ab) => Min(Box::new((ab.0.rewrite(ctx, mem), ab.1.rewrite(ctx, mem)))),
             Let(_) => self,
-            Decor(ab) => Decor(Box::new((ab.0.rewrite(ctx), ab.1.clone()))),
-            App(abc) => App(Box::new((abc.0, abc.1.rewrite(ctx), abc.2.rewrite(ctx)))),
+            Decor(ab) => Decor(Box::new((ab.0.rewrite(ctx, mem), ab.1.clone()))),
+            App(abc) => App(Box::new((abc.0, abc.1.rewrite(ctx, mem), abc.2.rewrite(ctx, mem)))),
         }
     }
 
     /// Simplify expression.
-    pub fn simplify(mut self) -> Expr {
+    pub fn simplify(mut self, mem: &mut MemoryManager) -> Expr {
         self.constant_reduction();
-        simplify::run(self)
+        simplify::run(self, mem)
     }
 
     /// Reduce constants by mutable reference.
     fn constant_reduction(&mut self) -> bool {constant_reduction::run(self)}
+
+    /// Compress expression.
+    pub fn compress(self, mem: &mut MemoryManager) -> Expr {
+        compressor::compress(self, mem)
+    }
 
     /// Evaluate X with Y set to zero.
     pub fn eval(&self, v: f64) -> f64 {
@@ -594,10 +617,17 @@ impl Expr {
     }
 
     /// Evaluate in 2D.
-    pub fn eval2<T>(&self, rt: &Runtime<T>, v: [f64; 2], ctx: &Context, cache: &mut Cache) -> f64 {
+    pub fn eval2<T>(
+        &self,
+        rt: &Runtime<T>,
+        v: [f64; 2],
+        ctx: &Context,
+        cache: &mut Cache,
+    ) -> f64 {
         use Expr::*;
 
         match self {
+            Arc(inner) => inner.eval2(rt, v, ctx, cache),
             X => v[0],
             Y => v[1],
             Tau => 6.283185307179586,
@@ -615,10 +645,14 @@ impl Expr {
             Sin(a) => a.eval2(rt, v, ctx, cache).sin(),
             Exp(a) => a.eval2(rt, v, ctx, cache).exp(),
             Ln(a) => a.eval2(rt, v, ctx, cache).ln(),
-            Add(ab) => ab.0.eval2(rt, v, ctx, cache) + ab.1.eval2(rt, v, ctx, cache),
-            Mul(ab) => ab.0.eval2(rt, v, ctx, cache) * ab.1.eval2(rt, v, ctx, cache),
-            Max(ab) => ab.0.eval2(rt, v, ctx, cache).max(ab.1.eval2(rt, v, ctx, cache)),
-            Min(ab) => ab.0.eval2(rt, v, ctx, cache).min(ab.1.eval2(rt, v, ctx, cache)),
+            Add(ab) => ab.0.eval2(rt, v, ctx, cache) +
+                ab.1.eval2(rt, v, ctx, cache),
+            Mul(ab) => ab.0.eval2(rt, v, ctx, cache) *
+                ab.1.eval2(rt, v, ctx, cache),
+            Max(ab) => ab.0.eval2(rt, v, ctx, cache)
+                .max(ab.1.eval2(rt, v, ctx, cache)),
+            Min(ab) => ab.0.eval2(rt, v, ctx, cache)
+                .min(ab.1.eval2(rt, v, ctx, cache)),
             Let(ab) => {
                 let ctx = &ab.0;
                 ab.1.eval2(rt, v, ctx, cache)
@@ -626,7 +660,8 @@ impl Expr {
             Decor(ab) => ab.0.eval2(rt, v, ctx, cache),
             App(abc) => {
                 let f = rt.functions[abc.0 as usize];
-                f(&rt.ctx, abc.0, abc.1.eval2(rt, v, ctx, cache), abc.2.eval2(rt, v, ctx, cache))
+                f(&rt.ctx, abc.0, abc.1.eval2(rt, v, ctx, cache),
+                    abc.2.eval2(rt, v, ctx, cache))
             }
         }
     }
@@ -634,10 +669,16 @@ impl Expr {
     /// Gets X dependence.
     ///
     /// This is used to improve caching when using interpreter.
-    pub fn dep_x<T>(&self, rt: &Runtime<T>, v: [f64; 2], ctx: &Context, cache: &mut Cache) -> bool {
+    pub fn dep_x<T>(
+        &self, rt: &Runtime<T>,
+        v: [f64; 2],
+        ctx: &Context,
+        cache: &mut Cache,
+    ) -> bool {
         use Expr::*;
 
         match self {
+            Arc(inner) => inner.dep_x(rt, v, ctx, cache),
             X => true,
             Y | Tau | E | Nat(_) => false,
             Var(name) => cache.val(rt, v, *name, ctx).1,
@@ -666,6 +707,7 @@ impl Expr {
         use Expr::*;
 
         match self {
+            Arc(inner) => (*inner).clone().subst2(p),
             X => p[0].clone(),
             Y => p[1].clone(),
             Tau | E => self.clone(),
@@ -694,6 +736,7 @@ impl Expr {
         use Expr::*;
 
         match self {
+            Arc(inner) => inner.var_range(),
             X | Y | Tau | E | Nat(_) => [0, 0],
             Var(n) => [*n, *n + 1],
             Neg(a) | Abs(a) | Recip(a) | Sqrt(a) |
@@ -722,6 +765,7 @@ impl Expr {
         use Expr::*;
 
         match self {
+            Arc(inner) => (*inner).clone().var_offset(off),
             X | Y | Tau | E | Nat(_) => self,
             Var(n) => Var((n as i64 + off) as u64),
             Neg(a) => Neg(Box::new(a.var_offset(off))),
@@ -1239,14 +1283,16 @@ mod tests {
 
     #[test]
     fn test_simplify_neg_neg() {
+        let ref mut mem = MemoryManager::new(10_000);
         let e1 = sub(nat(0), nat(1));
-        assert_eq!(e1.clone().simplify(), neg(nat(1)));
+        assert_eq!(e1.clone().simplify(mem), neg(nat(1)));
         let e2 = mul(e1.clone(), e1);
-        assert_eq!(e2.clone().simplify(), nat(1));
+        assert_eq!(e2.clone().simplify(mem), nat(1));
     }
 
     #[test]
     fn test_barycentric() {
+        let ref mut mem = MemoryManager::new(10_000);
         let a = [nat(0), nat(0)];
         let b = [nat(1), nat(0)];
         let c = [nat(1), nat(1)];
@@ -1255,150 +1301,156 @@ mod tests {
         let bary = to_barycentric(tri, center);
         let one_third = recip(nat(3));
         let [b1, b2, b3] = bary;
-        assert_eq!([b1.simplify(), b2.simplify(), b3.simplify()],
+        assert_eq!([b1.simplify(mem), b2.simplify(mem), b3.simplify(mem)],
             [one_third.clone(), one_third.clone(), one_third.clone()]);
     }
 
     #[test]
     fn test_simplify() {
+        let ref mut mem = MemoryManager::new(10_000);
+
+        let a = neg(neg(nat(1)));
+        let a = mul(a.clone(), a);
+        assert_eq!(a.simplify(mem), nat(1));
+
         // Subtraction.
         let a = sub(div(nat(2), nat(5)), recip(nat(3)));
-        assert_eq!(a.simplify(), recip(nat(15)));
+        assert_eq!(a.simplify(mem), recip(nat(15)));
 
         // 1/3 - 2/5
         // (5*1 - 3*2) / (3*5)
         // (5 - 6) / 15
         // -1/15
         let a = recip(nat(3)) - nat(2) / nat(5);
-        assert_eq!(a.simplify(), neg(recip(nat(15))));
+        assert_eq!(a.simplify(mem), neg(recip(nat(15))));
 
         let a = div(x(), nat(1));
-        assert_eq!(a.simplify(), x());
+        assert_eq!(a.simplify(mem), x());
 
         let a = sub(div(nat(2), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), recip(nat(5)));
+        assert_eq!(a.simplify(mem), recip(nat(5)));
 
         let a = sub(div(nat(3), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), div(nat(2), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(2), nat(5)));
 
         let a = sub(div(nat(3), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), recip(nat(10)));
+        assert_eq!(a.simplify(mem), recip(nat(10)));
 
         let a = sub(div(nat(4), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(3), nat(10)));
+        assert_eq!(a.simplify(mem), div(nat(3), nat(10)));
 
         // Addition.
         let a = add(div(nat(2), nat(5)), recip(nat(3)));
-        assert_eq!(a.simplify(), div(nat(11), nat(15)));
+        assert_eq!(a.simplify(mem), div(nat(11), nat(15)));
 
         let a = add(recip(nat(3)), div(nat(2), nat(5)));
-        assert_eq!(a.simplify(), div(nat(11), nat(15)));
+        assert_eq!(a.simplify(mem), div(nat(11), nat(15)));
 
         let a = add(div(nat(2), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), div(nat(3), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(3), nat(5)));
 
         let a = add(div(nat(3), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), div(nat(4), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(4), nat(5)));
 
         let a = add(div(nat(3), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(11), nat(10)));
+        assert_eq!(a.simplify(mem), div(nat(11), nat(10)));
 
         let a = add(div(nat(4), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(13), nat(10)));
+        assert_eq!(a.simplify(mem), div(nat(13), nat(10)));
 
         let a = add(nat(1), sub(div(x(), nat(100)), nat(1)));
-        assert_eq!(a.simplify(), div(x(), nat(100)));
+        assert_eq!(a.simplify(mem), div(x(), nat(100)));
 
         let a = sub(sub(x(), nat(1)), sub(y(), nat(1)));
-        assert_eq!(a.simplify(), sub(x(), y()));
+        assert_eq!(a.simplify(mem), sub(x(), y()));
 
         // Multiplication.
         let a = mul(div(nat(2), nat(5)), recip(nat(3)));
-        assert_eq!(a.simplify(), div(nat(2), nat(15)));
+        assert_eq!(a.simplify(mem), div(nat(2), nat(15)));
 
         let a = mul(recip(nat(3)), div(nat(2), nat(5)));
-        assert_eq!(a.simplify(), div(nat(2), nat(15)));
+        assert_eq!(a.simplify(mem), div(nat(2), nat(15)));
 
         let a = mul(div(nat(2), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), div(nat(2), nat(25)));
+        assert_eq!(a.simplify(mem), div(nat(2), nat(25)));
 
         let a = mul(div(nat(3), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), div(nat(3), nat(25)));
+        assert_eq!(a.simplify(mem), div(nat(3), nat(25)));
 
         let a = mul(div(nat(3), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(3), nat(10)));
+        assert_eq!(a.simplify(mem), div(nat(3), nat(10)));
 
         let a = mul(div(nat(4), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(2), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(2), nat(5)));
 
         let a = mul(nat(3), nat(0));
-        assert_eq!(a.simplify(), nat(0));
+        assert_eq!(a.simplify(mem), nat(0));
 
         let a = neg(mul(nat(3), nat(0)));
-        assert_eq!(a.simplify(), nat(0));
+        assert_eq!(a.simplify(mem), nat(0));
 
         let a = add(nat(2), mul(nat(9), nat(1)));
-        assert_eq!(a.simplify(), nat(11));
+        assert_eq!(a.simplify(mem), nat(11));
 
         let a = mul(mul(nat(2), x()), nat(3));
-        assert_eq!(a.simplify(), mul(nat(6), x()));
+        assert_eq!(a.simplify(mem), mul(nat(6), x()));
 
         // Division.
         let a = div(div(nat(2), nat(5)), recip(nat(3)));
-        assert_eq!(a.simplify(), div(nat(6), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(6), nat(5)));
 
         let a = div(recip(nat(3)), div(nat(2), nat(5)));
-        assert_eq!(a.simplify(), div(nat(5), nat(6)));
+        assert_eq!(a.simplify(mem), div(nat(5), nat(6)));
 
         let a = div(div(nat(2), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), nat(2));
+        assert_eq!(a.simplify(mem), nat(2));
 
         let a = div(div(nat(3), nat(5)), div(nat(1), nat(5)));
-        assert_eq!(a.simplify(), nat(3));
+        assert_eq!(a.simplify(mem), nat(3));
 
         let a = div(div(nat(3), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(6), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(6), nat(5)));
 
         let a = div(div(nat(4), nat(5)), div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), div(nat(8), nat(5)));
+        assert_eq!(a.simplify(mem), div(nat(8), nat(5)));
 
         let a = div(div(nat(2), nat(3)), nat(5));
-        assert_eq!(a.simplify(), div(nat(2), nat(15)));
+        assert_eq!(a.simplify(mem), div(nat(2), nat(15)));
 
         let a = div(mul(div(x(), nat(2)), nat(2)), nat(3));
-        assert_eq!(a.simplify(), div(x(), nat(3)));
+        assert_eq!(a.simplify(mem), div(x(), nat(3)));
 
         // Recip.
         let a = recip(div(nat(1), nat(3)));
-        assert_eq!(a.simplify(), nat(3));
+        assert_eq!(a.simplify(mem), nat(3));
 
         // Edge cases.
         let a = nat(4)/nat(5)+nat(3)/nat(20);
-        assert_eq!(a.simplify(), div(nat(19), nat(20)));
+        assert_eq!(a.simplify(mem), div(nat(19), nat(20)));
 
         let a = nat(6)-nat(2)/nat(3);
-        assert_eq!(a.simplify(), div(nat(16), nat(3)));
+        assert_eq!(a.simplify(mem), div(nat(16), nat(3)));
 
         let a = nat(2)/nat(3)-nat(6);
-        assert_eq!(a.simplify(), neg(div(nat(16), nat(3))));
+        assert_eq!(a.simplify(mem), neg(div(nat(16), nat(3))));
 
         let a = nat(6)+nat(2)/nat(3);
-        assert_eq!(a.simplify(), nat(20) / nat(3));
+        assert_eq!(a.simplify(mem), nat(20) / nat(3));
 
         let a = nat(2)/nat(3)+nat(6);
-        assert_eq!(a.simplify(), nat(20) / nat(3));
+        assert_eq!(a.simplify(mem), nat(20) / nat(3));
 
         let a = recip(nat(2)) + recip(nat(3));
-        assert_eq!(a.simplify(), nat(5) / nat(6));
+        assert_eq!(a.simplify(mem), nat(5) / nat(6));
 
         let a = recip(nat(2)) - recip(nat(2));
-        assert_eq!(a.simplify(), nat(0));
+        assert_eq!(a.simplify(mem), nat(0));
 
         let a = neg(nat(2)) * neg(nat(3));
-        assert_eq!(a.simplify(), nat(6));
+        assert_eq!(a.simplify(mem), nat(6));
 
         let a = neg(recip(nat(2))) * neg(nat(3));
-        assert_eq!(a.simplify(), div(nat(3), nat(2)));
+        assert_eq!(a.simplify(mem), div(nat(3), nat(2)));
 
         // -1/2 - -3
         // -1/2 + 3
@@ -1406,55 +1458,57 @@ mod tests {
         // (3*2 - 1)/2
         // 5/2
         let a = neg(recip(nat(2))) - neg(nat(3));
-        assert_eq!(a.simplify(), nat(5) / nat(2));
+        assert_eq!(a.simplify(mem), nat(5) / nat(2));
 
         let a = neg(x()) * x();
-        assert_eq!(a.simplify(), neg(square(x())));
+        assert_eq!(a.simplify(mem), neg(square(x())));
 
         let a = x() * neg(x());
-        assert_eq!(a.simplify(), neg(square(x())));
+        assert_eq!(a.simplify(mem), neg(square(x())));
 
         let a = neg(x()) * y();
-        assert_eq!(a.simplify(), neg(x() * y()));
+        assert_eq!(a.simplify(mem), neg(x() * y()));
 
         let a = x() * neg(y());
-        assert_eq!(a.simplify(), neg(x() * y()));
+        assert_eq!(a.simplify(mem), neg(x() * y()));
 
         let a = neg(x()) + y();
-        assert_eq!(a.simplify(), y() - x());
+        assert_eq!(a.simplify(mem), y() - x());
 
         let a = x() + neg(y());
-        assert_eq!(a.simplify(), x() - y());
+        assert_eq!(a.simplify(mem), x() - y());
 
         let a = (x() / nat(2)) * (y() / nat(2));
-        assert_eq!(a.simplify(), (x() * y()) / nat(4));
+        assert_eq!(a.simplify(mem), (x() * y()) / nat(4));
 
         let a = (x() / nat(2)) * y();
-        assert_eq!(a.simplify(), (x() * y()) / nat(2));
+        assert_eq!(a.simplify(mem), (x() * y()) / nat(2));
 
         let a = x() * (y() / nat(2));
-        assert_eq!(a.simplify(), (x() * y()) / nat(2));
+        assert_eq!(a.simplify(mem), (x() * y()) / nat(2));
     }
 
     #[test]
     fn test_simplify_step() {
+        let ref mut mem = MemoryManager::new(10_000);
+
         let a = step(nat(1));
-        assert_eq!(a.simplify(), nat(1));
+        assert_eq!(a.simplify(mem), nat(1));
 
         let a = step(div(nat(2), nat(1)));
-        assert_eq!(a.simplify(), nat(1));
+        assert_eq!(a.simplify(mem), nat(1));
 
         let a = step(div(nat(1), nat(2)));
-        assert_eq!(a.simplify(), nat(1));
+        assert_eq!(a.simplify(mem), nat(1));
 
         let a = step(neg(nat(1)));
-        assert_eq!(a.simplify(), nat(0));
+        assert_eq!(a.simplify(mem), nat(0));
 
         let a = step(neg(div(nat(1), nat(2))));
-        assert_eq!(a.simplify(), nat(0));
+        assert_eq!(a.simplify(mem), nat(0));
 
         let a = step(neg(nat(0)));
-        assert_eq!(a.simplify(), nat(1));
+        assert_eq!(a.simplify(mem), nat(1));
     }
 
     #[test]
@@ -1635,6 +1689,8 @@ mod tests {
 
     #[test]
     fn test_constant_reduction() {
+        let ref mut mem: MemoryManager = MemoryManager::new(10_000);
+
         let mut a = div(mul(nat(15), x()), nat(6));
         a.constant_reduction();
         assert_eq!(a, div(mul(nat(5), x()), nat(2)));
@@ -1653,7 +1709,7 @@ mod tests {
         let e6 = mul(nat(3264),sub(e4, e5));
         let e7 = sub(div(e3, nat(256)), div(e6, nat(32768)));
         let a = div(mul(e7,nat(524288)),nat(47432))
-            .simplify().simplify().simplify().simplify().simplify();
+            .simplify(mem).simplify(mem).simplify(mem).simplify(mem).simplify(mem);
         assert_eq!(a, div(sub(mul(nat(77), sub(div(x(), nat(2)), nat(179))),
             mul(nat(51), sub(div(y(), nat(4)), div(nat(205), nat(4))))), nat(5929)));
 

@@ -1,6 +1,7 @@
 //! Automatic compressor of math expression.
 
 use crate::*;
+use crate::memory_manager::MemoryManager;
 
 /// Automatic compressor of math expression.
 pub struct Compressor {
@@ -17,17 +18,38 @@ impl Compressor {
     }
 
     /// Creates compressor from expression.
-    pub fn from_expr(expr: &Expr) -> Compressor {
+    ///
+    /// Clears `MemoryManager::map` to use it for rewriting.
+    pub fn from_expr(expr: &Expr, mem: &mut MemoryManager) -> Compressor {
         let mut compressor = Compressor::new();
-        compressor.count_expr(expr);
+        mem.map.clear();
+        compressor.count_expr(expr, mem);
         compressor
     }
 
     /// Count expressions.
-    pub fn count_expr(&mut self, expr: &Expr) {
+    pub fn count_expr(&mut self, expr: &Expr, mem: &mut MemoryManager) {
         use Expr::*;
 
         if is_simple_expr(expr, 2) {return};
+
+        if let Arc(inner) = expr {
+            let c = mem.get_count(inner);
+            for (a, i) in &c.terms {
+                let mut found = false;
+                for (b, j) in &mut self.terms {
+                    if a == b {
+                        *j += i;
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    self.terms.push((a.clone(), *i));
+                }
+            }
+            return;
+        }
 
         let mut found = false;
         for term in &mut self.terms {
@@ -40,28 +62,35 @@ impl Compressor {
         if !found {self.terms.push((expr.clone(), 1))};
 
         match expr {
+            Arc(_) => {}
             X | Y | Tau | E | Var(_) | Nat(_) => {}
             Neg(a) | Abs(a) | Recip(a) | Sqrt(a) | Step(a) |
-            Sin(a) | Exp(a) | Ln(a) => self.count_expr(a),
+            Sin(a) | Exp(a) | Ln(a) => self.count_expr(a, mem),
             Add(ab) | Mul(ab) | Max(ab) | Min(ab) => {
-                self.count_expr(&ab.0);
-                self.count_expr(&ab.1);
+                self.count_expr(&ab.0, mem);
+                self.count_expr(&ab.1, mem);
             }
             Let(_) => {}
-            Decor(ab) => self.count_expr(&ab.0),
+            Decor(ab) => self.count_expr(&ab.0, mem),
             App(abc) => {
-                self.count_expr(&abc.1);
-                self.count_expr(&abc.2);
+                self.count_expr(&abc.1, mem);
+                self.count_expr(&abc.2, mem);
             }
         }
     }
 
     /// Gets the last maximum benefit of compressing term.
-    pub fn last_max_benefit(&self, min_count: usize, var_len: usize, cache: &mut IsCompressedCache) -> Option<(usize, usize)> {
+    pub fn last_max_benefit(
+        &self,
+        min_count: usize,
+        var_len: usize,
+        cache: &mut IsCompressedCache,
+        mem: &mut MemoryManager,
+    ) -> Option<(usize, usize)> {
         let mut res: Option<(usize, usize)> = None;
         for (i, term) in self.terms.iter().enumerate() {
             if term.1 < min_count {continue};
-            if !cache.is_compressed(&term.0) {continue};
+            if !cache.is_compressed(&term.0, mem) {continue};
             let benefit = compression_benefit(&term.0, term.1, var_len);
             if benefit == 0 {continue};
             if let Some((_, max_benefit)) = res {
@@ -99,9 +128,9 @@ impl IsCompressedCache {
     }
 
     /// Return true if expression is compressed.
-    pub fn is_compressed(&mut self, expr: &Expr) -> bool {
+    pub fn is_compressed(&mut self, expr: &Expr, mem: &mut MemoryManager) -> bool {
         if let Some(v) = self.0.get(expr) {*v} else {
-            let v = is_compressed(expr);
+            let v = is_compressed(expr, mem);
             self.0.insert(expr.clone(), v);
             v
         }
@@ -109,8 +138,8 @@ impl IsCompressedCache {
 }
 
 /// Returns `true` if expression is compressed.
-pub fn is_compressed(expr: &Expr) -> bool {
-    let compressor = Compressor::from_expr(expr);
+pub fn is_compressed(expr: &Expr, mem: &mut MemoryManager) -> bool {
+    let compressor = Compressor::from_expr(expr, mem);
     for term in &compressor.terms {
         if term.1 > 1 {
             let benefit = compression_benefit(&term.0, term.1, 3);
@@ -135,23 +164,24 @@ pub fn compression_benefit(expr: &Expr, count: usize, var_len: usize) -> usize {
 }
 
 /// Compresses the expression.
-pub fn compress(expr: Expr) -> Expr {
+pub fn compress(expr: Expr, mem: &mut MemoryManager) -> Expr {
     let mut res = expr;
     let mut ctx = Context::new();
+    mem.map.clear();
     let ref mut cache = IsCompressedCache::new();
     let mut compressor = Compressor::new();
     let mut var_len = 2;
     loop {
         compressor.terms.clear();
-        compressor.count_expr(&res);
-        if let Some((ind, benefit)) = compressor.last_max_benefit(2, var_len, cache) {
+        compressor.count_expr(&res, mem);
+        if let Some((ind, benefit)) = compressor.last_max_benefit(2, var_len, cache, mem) {
             let id = ctx.vars.len() as u64;
             let formula = compressor.terms[ind].0.clone();
             eprintln!("Compressed {} terms, benefit {}\n  {}", ctx.vars.len() + 1, benefit, formula);
             let name = format!("a{}", id);
             var_len = name.chars().count();
             ctx.vars.push((id, formula));
-            res = res.rewrite(&ctx);
+            res = res.rewrite(&ctx, mem);
         } else {break}
     }
     if ctx.vars.len() > 0 {let_(ctx, res)} else {res}

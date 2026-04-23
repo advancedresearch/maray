@@ -1,6 +1,7 @@
 //! Semantical partial evaluation analysis.
 
 use crate::*;
+use crate::memory_manager::MemoryManager;
 use semantics::*;
 
 /// Semantical partial evaluation.
@@ -31,17 +32,23 @@ impl Semantics for PartialEval {
             _ => None,
         }
     }
-    fn propagate_unop(&self, unop: UnOp, a: Expr, arg: Expr) -> (Expr, Expr) {
+    fn propagate_unop(
+        &self,
+        unop: UnOp,
+        a: Expr,
+        arg: Expr,
+        mem: &mut MemoryManager,
+    ) -> (Expr, Expr) {
         use UnOp::*;
         let arg = match unop {
-            Neg => neg(arg).simplify(),
-            Abs => abs(arg).simplify(),
-            Recip => recip(arg).simplify(),
-            Sqrt => sqrt(arg).simplify(),
-            Step => step(arg).simplify(),
-            Sin => sin(arg).simplify(),
-            Exp => exp(arg).simplify(),
-            Ln => ln(arg).simplify(),
+            Neg => neg(arg).simplify(mem),
+            Abs => abs(arg).simplify(mem),
+            Recip => recip(arg).simplify(mem),
+            Sqrt => sqrt(arg).simplify(mem),
+            Step => step(arg).simplify(mem),
+            Sin => sin(arg).simplify(mem),
+            Exp => exp(arg).simplify(mem),
+            Ln => ln(arg).simplify(mem),
             Id => arg,
         };
         (a, arg)
@@ -50,14 +57,15 @@ impl Semantics for PartialEval {
         &self,
         binop: BinOp,
         (a, b): (Expr, Expr),
-        (arg_a, arg_b): (Expr, Expr)
+        (arg_a, arg_b): (Expr, Expr),
+        mem: &mut MemoryManager,
     ) -> (Expr, Expr, Expr) {
         use BinOp::*;
         let arg = match binop {
-            Add => add(arg_a, arg_b).simplify(),
-            Mul => mul(arg_a, arg_b).simplify(),
-            Max => max(arg_a, arg_b).simplify(),
-            Min => min(arg_a, arg_b).simplify(),
+            Add => add(arg_a, arg_b).simplify(mem),
+            Mul => mul(arg_a, arg_b).simplify(mem),
+            Max => max(arg_a, arg_b).simplify(mem),
+            Min => min(arg_a, arg_b).simplify(mem),
         };
         (a, b, arg)
     }

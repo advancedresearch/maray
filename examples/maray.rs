@@ -52,7 +52,7 @@ fn main() -> anyhow::Result<()> {
          matches.get_one::<String>("output"),
          matches.get_many::<String>("textures"))
     {
-        let cpus = u32::from_str_radix(cpus, 10)?;
+        let _cpus = u32::from_str_radix(cpus, 10)?;
         let (size, color) = open(&file)?;
 
         // Set up texture functions.
@@ -68,8 +68,13 @@ fn main() -> anyhow::Result<()> {
         let rt = Runtime::<Textures>::from_parts(
             textures::Textures {images}, functions
         );
+        /* // There is a bug in the JIT, so disabling for now.
         let method = RenderMethod::JIT {
-            threads: cpus,
+            threads: _cpus,
+            report: Report::Duration(Duration::from_millis(500)),
+        };
+        */
+        let method = RenderMethod::ParallelInterpreted {
             report: Report::Duration(Duration::from_millis(500)),
         };
         gen(method, &rt, color, &out_file, size);

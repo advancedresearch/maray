@@ -2,7 +2,8 @@
 fn main() {
     use maray::*;
     use maray::sd::*;
-    
+    use maray::memory_manager::MemoryManager;
+
     let size: [u32; 2] = [512; 2];
 
     let fx = div(x(), nat(size[0] as u64));
@@ -21,8 +22,9 @@ fn main() {
         r: recip(nat(3)),
     }.inside().translate(center2.clone());
 
-    let shape = set_xor(circle, circle2).subst2(&p).simplify();
-    let shape = compressor::compress(shape);
+    let ref mut mem = MemoryManager::new(10_000);
+    let shape = set_xor(circle, circle2).subst2(&p).simplify(mem);
+    let shape = compressor::compress(shape, mem);
 
     let r = mul(shape.clone(), nat(255));
     let g = mul(shape.clone(), nat(255));
